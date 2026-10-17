@@ -26,6 +26,123 @@ Acceso: `http://IP-del-servidor:8181`. Las redes permitidas se cambian luego en
 
 Primer uso: **Sistema → Instalar nginx** (si no lo está) → **Tomar el control de nginx**.
 
+## Instalación manual (sin `install.sh`)
+
+Mismos pasos que hace el instalador, para quien prefiera revisarlos o adaptarlos. Todo
+como root (`sudo -i`), desde la carpeta del proyecto (descomprimida o clonada con
+`git clone https://github.com/0xenca/nginxmanager.git && cd nginxmanager`).
+
+**1. Dependencias del sistema**
+
+```bash
+# Debian / Ubuntu
+apt-get update
+apt-get install -y python3 python3-venv openssl logrotate
+apt-get install -y nginx libnginx-mod-stream certbot     # opcional: nginx + stream + certbot
+
+# RHEL / Rocky / Alma
+dnf install -y python3 openssl logrotate
+dnf install -y epel-release && dnf install -y nginx nginx-mod-stream certbot   # opcional
+```
+
+**2. Código y entorno virtual**
+
+```bash
+mkdir -p /opt/nginx-panel
+cp -r nginxpanel requirements.txt /opt/nginx-panel/
+python3 -m venv /opt/nginx-panel/venv
+/opt/nginx-panel/venv/bin/pip install --upgrade pip
+/opt/nginx-panel/venv/bin/pip install -r /opt/nginx-panel/requirements.txt
+
+install -d -m 700 /var/lib/nginx-panel        # base de datos
+install -d -m 750 /var/log/nginx/panel        # logs de los hosts
+```
+
+**3. Comando `nginx-panel`**
+
+```bash
+cat > /usr/local/bin/nginx-panel <<'EOF'
+#!/bin/sh
+set -a; [ -f /etc/nginx-panel.env ] && . /etc/nginx-panel.env; set +a
+cd /opt/nginx-panel && exec /opt/nginx-panel/venv/bin/python -m nginxpanel "$@"
+EOF
+chmod 755 /usr/local/bin/nginx-panel
+```
+
+**4. Configuración** — `/etc/nginx-panel.env` (ajusta IP, puerto y redes):
+
+```bash
+cat > /etc/nginx-panel.env <<'EOF'
+# Configuración de nginx-panel (se lee al arrancar el servicio)
+NP_BIND=0.0.0.0
+NP_PANEL_PORT=8181
+NP_BEHIND_PROXY=0
+# Redes que pueden usar el panel (CIDR separados por comas). Vacío = cualquiera.
+NP_ALLOWED_NETS=
+# Pon 1 si accedes al panel por HTTPS (cookies Secure)
+NP_SECURE_COOKIES=0
+EOF
+chmod 600 /etc/nginx-panel.env
+```
+
+**5. Servicio systemd**
+
+```bash
+cat > /etc/systemd/system/nginx-panel.service <<'EOF'
+[Unit]
+Description=nginx-panel (administración web de nginx)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/nginx-panel.env
+WorkingDirectory=/opt/nginx-panel
+ExecStart=/opt/nginx-panel/venv/bin/gunicorn --workers 1 --threads 8 --timeout 120 \
+  --no-control-socket --bind ${NP_BIND}:${NP_PANEL_PORT} --access-logfile - nginxpanel.wsgi:app
+Restart=on-failure
+# Necesita root: escribe en /etc/nginx, recarga nginx, ejecuta certbot y apt.
+User=root
+PrivateTmp=true
+ProtectHome=true
+NoNewPrivileges=false
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+**6. Rotación de logs** (en RHEL/Rocky cambia `adm` por `root`):
+
+```bash
+cat > /etc/logrotate.d/nginx-panel <<'EOF'
+/var/log/nginx/panel/*.log {
+    daily
+    rotate 30
+    missingok
+    notifempty
+    compress
+    delaycompress
+    sharedscripts
+    create 0640 root adm
+    postrotate
+        [ -s /run/nginx.pid ] && kill -USR1 $(cat /run/nginx.pid) || true
+    endscript
+}
+EOF
+```
+
+**7. Arrancar y crear el administrador**
+
+```bash
+systemctl daemon-reload
+systemctl enable --now nginx-panel
+nginx-panel create-admin admin --random      # imprime la contraseña generada
+systemctl status nginx-panel
+```
+
+Entra en `http://IP-del-servidor:8181`, cambia la contraseña, activa 2FA y sigue con
+**Sistema → Tomar el control de nginx**.
+
 ## Qué hace
 
 | Área | Detalle |
