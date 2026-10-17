@@ -1,11 +1,13 @@
 # nginx-panel
 
+[![Tests](https://github.com/0xenca/nginxmanager/actions/workflows/tests.yml/badge.svg)](https://github.com/0xenca/nginxmanager/actions/workflows/tests.yml)
+
 A Python (Flask) web panel to install and manage nginx on a Linux server: hosts,
 load-balanced backends, SSL, WebSocket, TCP/UDP streams, a basic WAF, caching, users with
 permissions, analytics and a log viewer.
 
-Tested against a real nginx 1.26: 115 end-to-end checks (forms → generated config →
-`nginx -t` → real traffic with curl).
+Covered by an automated test suite (validators, config generation, the web UI end to end,
+real `nginx -t` runs and the installer) that runs on every push. See [Tests](#tests).
 
 ## Installation
 
@@ -209,8 +211,30 @@ journalctl -u nginx-panel -f
 - **Analytics** parse the logs on every query. This works fine up to several hundred MB per
   range; with more volume the query is cut short and says so.
 - No GeoIP in this version.
-- Tested on Ubuntu 24.04 with nginx 1.26. Debian (nginx 1.22, `listen … http2` syntax) and
+- Tested on Ubuntu 24.04 with nginx 1.26 (CI uses Ubuntu 24.04's nginx 1.24). Debian (nginx 1.22, `listen … http2` syntax) and
   RHEL/Rocky (dnf + EPEL) are supported, but not tested.
+
+## Tests
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest
+```
+
+All paths are redirected to a temporary directory and nginx is never reloaded, so the suite is
+safe to run on any machine. If an `nginx` binary is available, the generated configuration is
+also validated with a real `nginx -t` (otherwise those tests are skipped; set
+`NP_REQUIRE_NGINX=1` to make that an error). `nginx -t` opens the listening ports, so as a
+non-root user run `sudo setcap cap_net_bind_service=+ep "$(command -v nginx)"` first.
+
+The [GitHub Actions workflow](.github/workflows/tests.yml) runs on every push and pull request:
+
+| Job | What it checks |
+|---|---|
+| Lint | `compileall`, ShellCheck on `install.sh`, executable bit |
+| Unit tests | the suite on Python 3.10, 3.11, 3.12 and 3.13 (without nginx) |
+| Tests with real nginx | the suite with Ubuntu's nginx + stream module, including `nginx -t` and rollback |
+| install.sh | a real install on a fresh Ubuntu runner: service up, login with the generated password, taking control of nginx, 444 for unknown domains, re-install keeps users |
 
 ## Structure
 
@@ -226,4 +250,6 @@ nginxpanel/
   auth.py       sessions, permissions, CSRF, TOTP, lockout
   jobs.py       background jobs (apt, certbot)
   templates/nginx/*.j2   nginx configuration templates
+tests/          pytest suite (see Tests)
+.github/workflows/tests.yml   CI
 ```

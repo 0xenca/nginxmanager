@@ -44,6 +44,7 @@ python3 -m venv "$DEST/venv"
 "$DEST/venv/bin/pip" install -q --upgrade pip
 "$DEST/venv/bin/pip" install -q -r "$DEST/requirements.txt"
 
+FIRST_INSTALL=0; [ -f /var/lib/nginx-panel/panel.db ] || FIRST_INSTALL=1
 install -d -m 700 /var/lib/nginx-panel
 install -d -m 750 /var/log/nginx/panel
 
@@ -111,14 +112,26 @@ ROT
 systemctl daemon-reload
 systemctl enable --now nginx-panel
 
-if ! /usr/local/bin/nginx-panel create-admin admin --random 2>/dev/null | tee /tmp/.np-admin | grep -q created; then :; fi
-PW=$(grep -oP 'Password: \K.*' /tmp/.np-admin || true); rm -f /tmp/.np-admin
+# The admin is only created on the first install: re-running the installer keeps existing users.
+PW=""
+if [ $FIRST_INSTALL -eq 1 ]; then
+  OUT=$(/usr/local/bin/nginx-panel create-admin admin --random 2>/dev/null || true)
+  PW=$(printf '%s\n' "$OUT" | sed -n 's/^Password: //p')
+fi
 
 echo
 echo "================================================================"
-IPS=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v ':' | head -3 | sed "s|.*|http://&:$PORT|" | tr '\n' ' ')
+if [ "$BIND" = "0.0.0.0" ]; then
+  IPS=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v -e ':' -e '^$' | head -3 | sed "s|.*|http://&:$PORT|" | tr '\n' ' ')
+else
+  IPS="http://$BIND:$PORT"
+fi
 echo " nginx-panel installed. Listening on $BIND:$PORT  →  ${IPS:-http://IP:$PORT}"
-[ -n "$PW" ] && echo " User: admin   Password: $PW   (change it and enable 2FA)"
+if [ -n "$PW" ]; then
+  echo " User: admin   Password: $PW   (change it and enable 2FA)"
+else
+  echo " Existing users kept. Lost access? sudo nginx-panel create-admin admin --random"
+fi
 if [ "$BIND" = "0.0.0.0" ] && [ -z "$ALLOW" ]; then
   echo " WARNING: the panel (which runs as root) is reachable from any IP."
   echo "          Enable 2FA and restrict access with NP_ALLOWED_NETS in /etc/nginx-panel.env"
