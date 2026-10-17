@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Certificados{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Certificados SSL</h1><p>Let's Encrypt se renueva solo (timer de certbot) y recarga nginx tras cada renovación.</p></div>
+  {% if can('certs', 2) %}<a class="btn primary" href="{{ url_for('main.cert_new') }}">+ Nuevo certificado</a>{% endif %}
+</div>
+{% if not certbot %}<div class="flash warn"><pre>certbot no está instalado: solo puedes subir certificados o generar autofirmados.</pre></div>{% endif %}
+<div class="card table-wrap">
+{% if items %}
+<table>
+  <tr><th>Nombre</th><th>Tipo</th><th>Dominios</th><th>Caduca</th><th>Estado</th><th>En uso</th><th></th></tr>
+  {% for c in items %}
+  <tr>
+    <td><b>{{ c.name }}</b>{% if c.issuer %}<div class="muted" style="font-size:12px">{{ c.issuer[:60] }}</div>{% endif %}</td>
+    <td>{{ {'letsencrypt':"Let's Encrypt",'custom':'Propio','selfsigned':'Autofirmado'}[c.kind] }}</td>
+    <td class="mono">{{ c.domains|join('<br>'|safe) }}</td>
+    <td>{% if c.days is not none %}{{ c.expires|dt('%d/%m/%Y') }}<br><span class="tag {{ 'err' if c.days < 7 else ('warn' if c.days < 21 else 'ok') }}">{{ c.days }} días</span>{% else %}—{% endif %}</td>
+    <td>{% if c.status == 'ok' %}<span class="tag ok">válido</span>{% elif c.status == 'pending' %}<span class="tag warn">pendiente</span>{% if c.job %} <a href="{{ url_for('main.job', jid=c.job) }}">ver tarea</a>{% endif %}{% else %}<span class="tag err">error</span>{% if c.job %} <a href="{{ url_for('main.job', jid=c.job) }}">ver log</a>{% endif %}{% endif %}</td>
+    <td>{{ c.used|join('<br>'|safe) or '—' }}</td>
+    <td class="num" style="white-space:nowrap">{% if can('certs', 2) %}
+      {% if c.kind != 'custom' %}<form method="post" class="inline" action="{{ url_for('main.cert_renew', eid=c.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn sm">{{ 'Reintentar' if c.status != 'ok' else 'Renovar' }}</button></form>{% endif %}
+      <form method="post" class="inline" action="{{ url_for('main.cert_delete', eid=c.id) }}" data-confirm="¿Borrar certificado?"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn sm danger">Borrar</button></form>
+    {% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}<div class="empty">Aún no hay certificados.</div>{% endif %}
+</div>
+{% endblock %}

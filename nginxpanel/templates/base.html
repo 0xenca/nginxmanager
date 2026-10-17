@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Panel{% endblock %} · Nginx Panel</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M16 2 29 9.5v13L16 30 3 22.5v-13z' fill='%23159a5b'/><path d='M11 21V11l10 10V11' stroke='white' stroke-width='2.6' fill='none'/></svg>">
+<meta name="csrf-token" content="{{ csrf_token() }}">
+</head>
+<body class="{% block bodyclass %}{% endblock %}">
+{% if g.user %}
+<aside class="side" id="side">
+  <a class="brand" href="{{ url_for('main.dashboard') }}">
+    <svg viewBox="0 0 32 32" width="28" height="28"><path d="M16 2 29 9.5v13L16 30 3 22.5v-13z" fill="var(--accent)"/><path d="M11 21V11l10 10V11" stroke="#fff" stroke-width="2.6" fill="none"/></svg>
+    <span>nginx<b>panel</b></span>
+  </a>
+  {% set ep = request.endpoint or '' %}
+  <nav>
+    <a href="{{ url_for('main.dashboard') }}" class="{{ 'on' if ep == 'main.dashboard' }}">Resumen</a>
+    <div class="navlabel">Tráfico</div>
+    {% if can('hosts') %}<a href="{{ url_for('main.hosts') }}" class="{{ 'on' if 'host' in ep }}">Hosts</a>{% endif %}
+    {% if can('backends') %}<a href="{{ url_for('main.backends') }}" class="{{ 'on' if 'backend' in ep }}">Backends</a>{% endif %}
+    {% if can('streams') %}<a href="{{ url_for('main.streams') }}" class="{{ 'on' if 'stream' in ep }}">Streams TCP/UDP</a>{% endif %}
+    <div class="navlabel">Protección</div>
+    {% if can('certs') %}<a href="{{ url_for('main.certs') }}" class="{{ 'on' if 'cert' in ep }}">Certificados</a>{% endif %}
+    {% if can('access') %}<a href="{{ url_for('main.access_lists') }}" class="{{ 'on' if 'access' in ep }}">Listas de acceso</a>{% endif %}
+    {% if can('security') %}<a href="{{ url_for('main.security') }}" class="{{ 'on' if 'security' in ep }}">Seguridad</a>{% endif %}
+    {% if can('logs') %}
+    <div class="navlabel">Observabilidad</div>
+    <a href="{{ url_for('main.analytics') }}" class="{{ 'on' if ep == 'main.analytics' }}">Analíticas</a>
+    <a href="{{ url_for('main.logs_view') }}" class="{{ 'on' if ep in ('main.logs_view',) }}">Logs de acceso</a>
+    <a href="{{ url_for('main.logs_errors') }}" class="{{ 'on' if ep == 'main.logs_errors' }}">Logs de error</a>
+    <a href="{{ url_for('main.logs_files') }}" class="{{ 'on' if ep == 'main.logs_files' }}">Ficheros de log</a>
+    {% endif %}
+    <div class="navlabel">Administración</div>
+    {% if can('users') %}<a href="{{ url_for('main.users') }}" class="{{ 'on' if 'user' in ep }}">Usuarios</a>
+    <a href="{{ url_for('main.audit') }}" class="{{ 'on' if ep == 'main.audit' }}">Auditoría</a>{% endif %}
+    {% if can('system') %}<a href="{{ url_for('main.system') }}" class="{{ 'on' if 'system' in ep or ep == 'main.job' }}">Sistema</a>{% endif %}
+  </nav>
+  <div class="me">
+    <a href="{{ url_for('main.profile') }}">{{ g.user.username }}{% if g.user.is_admin %} <span class="tag">admin</span>{% endif %}</a>
+    <form method="post" action="{{ url_for('main.logout') }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="link">Salir</button></form>
+  </div>
+</aside>
+{% endif %}
+<main class="{{ 'withside' if g.user }}">
+  {% if g.user %}<button class="menu-btn" data-toggle="side" aria-label="Menú">☰</button>{% endif %}
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% if msgs %}<div class="flashes">{% for cat, m in msgs %}<div class="flash {{ cat }}"><pre>{{ m }}</pre></div>{% endfor %}</div>{% endif %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

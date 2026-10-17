@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Sistema{% endblock %}
+{% block content %}
+{% set CSRF %}<input type="hidden" name="_csrf" value="{{ csrf_token() }}">{% endset %}
+<div class="head"><div><h1>Sistema</h1>
+<p>{% if env.installed %}<span class="dot {{ 'ok' if running else 'err' }}"></span>nginx {{ env.version }} · {{ 'en marcha' if running else 'detenido' }} · usuario <code>{{ env.user }}</code>{% else %}<span class="dot err"></span>nginx no instalado{% endif %}{% if dry %} · <span class="tag warn">DRY_RUN</span>{% endif %}</p></div></div>
+
+<div class="grid g2">
+<div class="card">
+  <h2>1 · Instalación</h2>
+  {% if env.installed %}
+    <p>nginx <b>{{ env.version }}</b> instalado. certbot: {{ '✔ ' ~ certbot if certbot else '✘ no instalado' }}</p>
+    <p>Módulos: {% for k, lbl in [('stream','stream'),('has_http2','http2'),('has_stub_status','stub_status'),('has_realip','realip'),('reject_handshake','ssl_reject_handshake')] %}<span class="tag {{ 'ok' if env[k] else 'err' }}">{{ lbl }}</span>{% endfor %}</p>
+    {% if not certbot or not env.stream %}<p class="muted">Faltan componentes: puedes relanzar la instalación, es idempotente.</p>{% endif %}
+  {% else %}
+    <p>Se instalará nginx, el módulo stream, certbot y openssl con el gestor de paquetes del sistema.</p>
+  {% endif %}
+  {% if install_cmds and can('system', 2) %}
+  <details><summary class="muted">Comandos que se ejecutarán</summary><pre class="code">{{ install_cmds|join('\n') }}</pre></details>
+  <form method="post" action="{{ url_for('main.system_install') }}" data-confirm="Se instalarán paquetes con privilegios de root. ¿Continuar?" style="margin-top:12px">{{ CSRF }}<button class="btn {{ 'primary' if not env.installed }}">{{ 'Reinstalar / completar' if env.installed else 'Instalar nginx' }}</button></form>
+  {% elif not install_cmds %}<p class="tag err">Sistema sin apt ni dnf: instala nginx a mano.</p>{% endif %}
+</div>
+
+<div class="card">
+  <h2>2 · Gestión de la configuración</h2>
+  {% if managed %}
+    <p><span class="tag ok">gestionado por el panel</span> <code>nginx.conf</code> lo genera el panel; tu original está en <code>nginx.conf.panel-orig</code>.</p>
+  {% else %}
+    <p><span class="tag warn">no gestionado</span> El panel reescribirá <code>nginx.conf</code> (se guarda copia) y dejará de cargar
+      <code>sites-enabled/</code> y <code>conf.d/</code> salvo que lo actives en Seguridad → Avanzado.</p>
+  {% endif %}
+  {% if can('system', 2) and env.installed %}
+  <div class="actions">
+    <form method="post" action="{{ url_for('main.system_apply') }}" data-confirm="{{ 'Regenerar y aplicar la configuración?' if managed else 'El panel tomará el control de nginx.conf. ¿Continuar?' }}">{{ CSRF }}<button class="btn primary">{{ 'Regenerar y aplicar' if managed else 'Tomar el control de nginx' }}</button></form>
+    <form method="post" action="{{ url_for('main.system_service', action='test') }}">{{ CSRF }}<button class="btn">nginx -t</button></form>
+    <form method="post" action="{{ url_for('main.system_service', action='reload') }}">{{ CSRF }}<button class="btn">Recargar</button></form>
+    <form method="post" action="{{ url_for('main.system_service', action='restart') }}" data-confirm="Reiniciar corta las conexiones activas. ¿Seguro?">{{ CSRF }}<button class="btn">Reiniciar</button></form>
+    <a class="btn" href="{{ url_for('main.system_conf') }}">Ver nginx.conf</a>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Copias de seguridad de la config</h2>
+  <p class="muted">Se guarda una antes de cada cambio (últimas 40).</p>
+  {% if backups %}
+  <table class="dense">{% for b in backups %}<tr><td class="mono">{{ b }}</td><td class="num">{% if can('system', 2) %}<form method="post" class="inline" action="{{ url_for('main.system_restore') }}" data-confirm="¿Restaurar {{ b }}?">{{ CSRF }}<input type="hidden" name="name" value="{{ b }}"><button class="btn sm">Restaurar</button></form>{% endif %}</td></tr>{% endfor %}</table>
+  {% else %}<p class="muted">Ninguna todavía.</p>{% endif %}
+</div>
+
+<div class="card">
+  <h2>Tareas recientes</h2>
+  {% if jobs %}
+  <table class="dense">{% for j in jobs %}<tr><td><a href="{{ url_for('main.job', jid=j.id) }}">{{ j.title }}</a></td><td>{{ j.started|dt }}</td><td><span class="tag {{ 'ok' if j.status == 'ok' else ('warn' if j.status == 'running' else 'err') }}">{{ j.status }}</span></td></tr>{% endfor %}</table>
+  {% else %}<p class="muted">Ninguna.</p>{% endif %}
+</div>
+</div>
+{% endblock %}

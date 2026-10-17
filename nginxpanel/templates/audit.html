@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Auditoría{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Auditoría</h1><p>Quién hizo qué y desde dónde.</p></div>
+<form method="get" class="actions"><input type="search" name="q" value="{{ q }}" placeholder="Buscar usuario, acción, IP…"><button class="btn">Buscar</button></form></div>
+<div class="card table-wrap" style="padding:6px">
+<table class="dense">
+  <tr><th>Fecha</th><th>Usuario</th><th>IP</th><th>Acción</th><th>Detalle</th></tr>
+  {% for r in rows %}<tr><td class="mono">{{ r.ts|dt('%d/%m/%Y %H:%M:%S') }}</td><td>{{ r.username or '—' }}</td><td class="mono">{{ r.ip }}</td>
+  <td><span class="tag {{ 'err' if 'fallido' in r.action or 'borrar' in r.action else '' }}">{{ r.action }}</span></td><td class="mono trunc" title="{{ r.detail }}">{{ r.detail }}</td></tr>
+  {% else %}<tr><td colspan="5" class="empty">Sin registros.</td></tr>{% endfor %}
+</table>
+</div>
+<div class="pager">{% if page > 1 %}<a class="btn sm" href="?q={{ q }}&page={{ page - 1 }}">← Más recientes</a>{% endif %}{% if rows|length == 100 %}<a class="btn sm" href="?q={{ q }}&page={{ page + 1 }}">Más antiguas →</a>{% endif %}</div>
+{% endblock %}

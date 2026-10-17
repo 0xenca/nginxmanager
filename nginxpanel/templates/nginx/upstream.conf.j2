@@ -1,0 +1,16 @@
+# Backend {{ b.id }}: {{ b.name }}
+upstream panel_up_{{ b.id }} {
+{% if b.method == "least_conn" %}
+    least_conn;
+{% elif b.method == "ip_hash" %}
+    ip_hash;
+{% elif b.method == "hash_ip" %}
+    hash $remote_addr consistent;
+{% endif %}
+{% for sv in b.servers %}
+    server {{ sv.host }}:{{ sv.port }}{% if sv.weight != 1 %} weight={{ sv.weight }}{% endif %} max_fails={{ b.max_fails }} fail_timeout={{ b.fail_timeout }}{% if sv.backup %} backup{% endif %}{% if sv.down %} down{% endif %};
+{% endfor %}
+{% if b.keepalive %}
+    keepalive {{ b.keepalive }};
+{% endif %}
+}

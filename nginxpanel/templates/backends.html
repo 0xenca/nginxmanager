@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Backends{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Backends</h1><p>Grupos de servidores (upstreams) con balanceo y detección de caídas. Úsalos desde un host.</p></div>
+  {% if can('backends', 2) %}<a class="btn primary" href="{{ url_for('main.backend_new') }}">+ Nuevo backend</a>{% endif %}
+</div>
+<div class="card table-wrap">
+{% if backends %}
+<table>
+  <tr><th>Nombre</th><th>Servidores</th><th>Balanceo</th><th>Usado por</th><th></th></tr>
+  {% for b in backends %}
+  <tr>
+    <td><b>{{ b.name }}</b><div class="muted mono">panel_up_{{ b.id }}</div></td>
+    <td class="mono">{% for s in b.servers %}<div>{{ s.host }}:{{ s.port }}{% if s.weight != 1 %} <span class="tag">w={{ s.weight }}</span>{% endif %}{% if s.backup %} <span class="tag warn">backup</span>{% endif %}{% if s.down %} <span class="tag err">down</span>{% endif %}</div>{% endfor %}</td>
+    <td>{{ {'round_robin':'Round robin','least_conn':'Menos conexiones','ip_hash':'IP hash','hash_ip':'Hash consistente'}[b.method] }}<div class="muted">keepalive {{ b.keepalive }} · {{ b.max_fails }} fallos / {{ b.fail_timeout }}</div></td>
+    <td>{% for h in used.get(b.id, []) %}<div class="mono">{{ h.domains[0] }}</div>{% else %}<span class="muted">—</span>{% endfor %}</td>
+    <td class="num" style="white-space:nowrap">{% if can('backends', 2) %}
+      <a class="btn sm" href="{{ url_for('main.backend_edit', eid=b.id) }}">Editar</a>
+      <form method="post" class="inline" action="{{ url_for('main.backend_delete', eid=b.id) }}" data-confirm="¿Borrar backend?"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn sm danger">Borrar</button></form>
+    {% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}<div class="empty">Aún no hay backends.</div>{% endif %}
+</div>
+{% endblock %}

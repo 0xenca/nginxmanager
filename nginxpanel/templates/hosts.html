@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Hosts{% endblock %}
+{% block content %}
+{% from "_hoststatus.html" import status_cell %}
+{% set CSRF %}<input type="hidden" name="_csrf" value="{{ csrf_token() }}">{% endset %}
+{% set manage = can('hosts', 2) %}
+<div class="head">
+  <div><h1>Hosts</h1><p>{{ hosts|length }} hosts en {{ groups|length }} grupo{{ 's' if groups|length != 1 }} · estado comprobado {{ ('el ' ~ last_check|dt('%d/%m a las %H:%M')) if last_check else 'nunca' }} <span id="checkmsg" class="muted"></span></p></div>
+  <div class="actions">
+    <input type="search" id="hostfilter" placeholder="Buscar dominio, destino…" style="width:230px">
+    {% if hosts %}
+    <form method="post" action="{{ url_for('main.hosts_check') }}" class="inline" data-check>{{ CSRF }}<input type="hidden" name="scope" value="all">
+      <button class="btn" title="Última comprobación: {{ last_check|dt('%d/%m %H:%M') if last_check else 'nunca' }}">⟳ Comprobar todos</button></form>
+    {% endif %}
+    {% if manage %}
+    <details class="pop">
+      <summary class="btn">+ Grupo</summary>
+      <form method="post" action="{{ url_for('main.group_new') }}" class="popbody">{{ CSRF }}
+        <input type="text" name="name" placeholder="Nombre (ej. Internos)" required maxlength="64">
+        <div class="swatches">{% for c, lbl in colors %}<label title="{{ lbl }}"><input type="radio" name="color" value="{{ c }}" {{ 'checked' if loop.first }}><span class="sw gc-{{ c }}"></span></label>{% endfor %}</div>
+        <button class="btn primary">Crear grupo</button>
+      </form>
+    </details>
+    <a class="btn primary" href="{{ url_for('main.host_new') }}">+ Nuevo host</a>
+    {% endif %}
+  </div>
+</div>
+
+{% if manage and hosts %}
+<form method="post" action="{{ url_for('main.hosts_move') }}" id="bulk" class="bulkbar" hidden>{{ CSRF }}
+  <b><span id="bulkcount">0</span> seleccionados</b>
+  <span class="muted">→ mover a</span>
+  <select name="group_id"><option value="0">— sin grupo —</option>{% for gr in groups %}<option value="{{ gr.id }}">{{ gr.name }}</option>{% endfor %}</select>
+  <button class="btn primary sm">Mover</button>
+  <button type="button" class="btn sm" id="bulkclear">Cancelar</button>
+</form>
+{% endif %}
+
+{% macro host_table(items) %}
+<div class="table-wrap">
+<table>
+  <tr>{% if manage %}<th style="width:28px"><input type="checkbox" class="selall" title="Seleccionar todos"></th>{% endif %}<th>Dominios</th><th>Estado</th><th>Destino</th><th>SSL</th><th>Opciones</th><th></th></tr>
+  {% for h in items %}
+  <tr class="hostrow {{ '' if h.enabled else 'off' }}" data-search="{{ (h.domains|join(' ') ~ ' ' ~ (h.forward_host or '') ~ ' ' ~ (h.redirect_url or '') ~ ' ' ~ (h.notes or ''))|lower }}">
+    {% if manage %}<td><input type="checkbox" name="ids" value="{{ h.id }}" form="bulk" class="sel"></td>{% endif %}
+    <td>{% for d in h.domains %}<div class="mono">{% if h.enabled %}<a href="http{{ 's' if h.cert_id }}://{{ d|replace('*.', '') }}" target="_blank" rel="noopener">{{ d }}</a>{% else %}{{ d }}{% endif %}</div>{% endfor %}</td>
+    <td class="hscell" data-hid="{{ h.id }}">{{ status_cell(statuses.get(h.id)) }}</td>
+    <td class="mono">
+      {% if h.type == 'redirect' %}<span class="tag">{{ h.redirect_code }}</span> {{ h.redirect_url }}
+      {% elif h.forward_mode == 'backend' %}{{ h.forward_scheme }}://<b>{{ backends[h.backend_id].name if h.backend_id in backends else '?' }}</b>
+      {% else %}{{ h.forward_scheme }}://{{ h.forward_host }}:{{ h.forward_port }}{% endif %}
+    </td>
+    <td>{% if h.cert_id and h.cert_id in certs %}{% set c = certs[h.cert_id] %}<span class="tag {{ 'ok' if c.status == 'ok' else 'warn' }}">{{ c.name }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td>
+      {% if h.listen_ip %}<span class="tag">@ {{ h.listen_ip }}</span>{% endif %}
+      {% if h.websocket %}<span class="tag">WS</span>{% endif %}
+      {% if h.waf %}<span class="tag ok">WAF</span>{% endif %}
+      {% if h.cache_mode and h.cache_mode != 'off' %}<span class="tag">caché {{ h.cache_mode }}</span>{% endif %}
+      {% if h.rate_limit %}<span class="tag">rate-limit</span>{% endif %}
+      {% if h.access_list_id and h.access_list_id in acls %}<span class="tag warn">{{ acls[h.access_list_id].name }}</span>{% endif %}
+      {% if h.hsts %}<span class="tag">HSTS</span>{% endif %}
+    </td>
+    <td class="num" style="white-space:nowrap">
+      <form method="post" action="{{ url_for('main.hosts_check') }}" class="inline" data-check>{{ CSRF }}<input type="hidden" name="scope" value="host:{{ h.id }}"><button class="btn sm" title="Comprobar este host">⟳</button></form>
+      <a class="btn sm" href="{{ url_for('main.host_config', eid=h.id) }}">Config</a>
+      {% if can('logs') %}<a class="btn sm" href="{{ url_for('main.analytics', host=h.domains[0]) }}">Stats</a>{% endif %}
+      {% if manage %}
+      <a class="btn sm" href="{{ url_for('main.host_edit', eid=h.id) }}">Editar</a>
+      <form method="post" class="inline" action="{{ url_for('main.host_toggle', eid=h.id) }}">{{ CSRF }}<button class="btn sm">{{ 'Desactivar' if h.enabled else 'Activar' }}</button></form>
+      <form method="post" class="inline" action="{{ url_for('main.host_delete', eid=h.id) }}" data-confirm="¿Borrar este host?">{{ CSRF }}<button class="btn sm danger">Borrar</button></form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% endmacro %}
+
+{% if not hosts and not groups %}
+<div class="card empty">Aún no hay hosts.{% if manage %} Crea grupos (Internos, Públicos, Clientes…) para organizarlos desde el principio.{% endif %}</div>
+{% endif %}
+
+{% for gr in groups %}
+{% set items = by_group[gr.id] %}
+{% set active = items|selectattr('enabled')|list|length %}
+<section class="group card" data-group="{{ gr.id }}">
+  <div class="ghead">
+    <button type="button" class="gtoggle" aria-expanded="true"><span class="chev">▾</span>
+    <span class="gdot gc-{{ gr.color or 'slate' }}"></span>
+    <b class="gname">{{ gr.name }}</b>
+    <span class="muted gcount">{{ active }}/{{ items|length }} activos</span></button>
+    <div class="gacts">
+      {% if items %}<form method="post" action="{{ url_for('main.hosts_check') }}" class="inline" data-check>{{ CSRF }}<input type="hidden" name="scope" value="group:{{ gr.id }}"><button class="btn sm">⟳ Comprobar</button></form>{% endif %}
+      {% if can('logs') and items %}<a class="btn sm" href="{{ url_for('main.analytics', group=gr.id) }}">Stats</a>{% endif %}
+      {% if manage %}
+      <a class="btn sm" href="{{ url_for('main.host_new', group=gr.id) }}">+ Host</a>
+      {% if items %}
+      <form method="post" class="inline" action="{{ url_for('main.group_toggle', gid=gr.id) }}" data-confirm="¿{{ 'Desactivar' if active else 'Activar' }} los {{ items|length }} hosts de «{{ gr.name }}»?">{{ CSRF }}<input type="hidden" name="enable" value="{{ '0' if active else '1' }}"><button class="btn sm">{{ 'Desactivar todo' if active else 'Activar todo' }}</button></form>
+      {% endif %}
+      <details class="pop right">
+        <summary class="btn sm">Editar</summary>
+        <div class="popbody">
+          <form method="post" action="{{ url_for('main.group_edit', gid=gr.id) }}">{{ CSRF }}
+            <input type="text" name="name" value="{{ gr.name }}" required maxlength="64">
+            <div class="swatches">{% for c, lbl in colors %}<label title="{{ lbl }}"><input type="radio" name="color" value="{{ c }}" {{ 'checked' if (gr.color or 'slate') == c }}><span class="sw gc-{{ c }}"></span></label>{% endfor %}</div>
+            <button class="btn primary sm">Guardar</button>
+          </form>
+          <form method="post" action="{{ url_for('main.group_delete', gid=gr.id) }}" data-confirm="¿Borrar el grupo «{{ gr.name }}»? Sus hosts NO se borran: pasan a «Sin grupo».">{{ CSRF }}<button class="btn sm danger">Borrar grupo</button></form>
+        </div>
+      </details>
+      {% endif %}
+    </div>
+  </div>
+  <div class="gbody">{% if items %}{{ host_table(items) }}{% else %}<div class="empty" style="padding:18px">Grupo vacío. Mueve hosts aquí marcándolos, o crea uno con «+ Host».</div>{% endif %}</div>
+</section>
+{% endfor %}
+
+{% if loose %}
+{% if groups %}
+<section class="group card" data-group="0">
+  <div class="ghead">
+    <button type="button" class="gtoggle" aria-expanded="true"><span class="chev">▾</span><span class="gdot gc-none"></span><b class="gname">Sin grupo</b><span class="muted gcount">{{ loose|selectattr('enabled')|list|length }}/{{ loose|length }} activos</span></button>
+    <div class="gacts"><form method="post" action="{{ url_for('main.hosts_check') }}" class="inline" data-check>{{ CSRF }}<input type="hidden" name="scope" value="group:0"><button class="btn sm">⟳ Comprobar</button></form>{% if can('logs') %}<a class="btn sm" href="{{ url_for('main.analytics', group=0) }}">Stats</a>{% endif %}</div>
+  </div>
+  <div class="gbody">{{ host_table(loose) }}</div>
+</section>
+{% else %}
+<div class="card">{{ host_table(loose) }}</div>
+{% endif %}
+{% endif %}
+<div id="nomatch" class="card empty" hidden>Ningún host coincide con la búsqueda.</div>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Ficheros de log{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Ficheros de log</h1><p>Incluye los rotados (logrotate diario, 30 días). Los .gz se descargan comprimidos.</p></div></div>
+<div class="card table-wrap">
+{% if files %}
+<table><tr><th>Fichero</th><th class="num">Tamaño</th><th>Última escritura</th><th></th></tr>
+{% for f in files %}<tr><td class="mono">{{ f.name }}</td><td class="num">{{ human_bytes(f.size) }}</td><td>{{ f.mtime|dt('%d/%m/%Y %H:%M:%S') }}</td><td class="num"><a class="btn sm" href="{{ url_for('main.logs_download', name=f.name) }}">Descargar</a></td></tr>{% endfor %}
+</table>
+{% else %}<div class="empty">No hay logs todavía.</div>{% endif %}
+</div>
+{% endblock %}

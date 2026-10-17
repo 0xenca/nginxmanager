@@ -1,0 +1,6 @@
+# Cabeceras de seguridad (nginx-panel). Se incluyen en cada location porque
+# add_header no se hereda si la location define alguno propio.
+add_header X-Frame-Options "SAMEORIGIN" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()" always;

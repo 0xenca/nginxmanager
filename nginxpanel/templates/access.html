@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Listas de acceso{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Listas de acceso</h1><p>Restringe hosts o streams por IP y/o usuario y contraseña (auth básica, solo HTTP).</p></div>
+  {% if can('access', 2) %}<a class="btn primary" href="{{ url_for('main.access_new') }}">+ Nueva lista</a>{% endif %}
+</div>
+<div class="card table-wrap">
+{% if items %}
+<table>
+  <tr><th>Nombre</th><th>Permitir</th><th>Denegar</th><th>Por defecto</th><th>Usuarios</th><th>En uso</th><th></th></tr>
+  {% for a in items %}
+  <tr>
+    <td><b>{{ a.name }}</b></td>
+    <td class="mono">{{ a.allow|join('<br>'|safe) or '—' }}</td>
+    <td class="mono">{{ a.deny|join('<br>'|safe) or '—' }}</td>
+    <td><span class="tag {{ 'err' if a.default_action == 'deny' else 'ok' }}">{{ 'denegar' if a.default_action == 'deny' else 'permitir' }}</span></td>
+    <td>{{ a.auth_users|map(attribute='user')|join(', ') or '—' }}{% if a.auth_users %}<div class="muted">satisfy {{ a.satisfy }}</div>{% endif %}</td>
+    <td>{{ used[a.id]|join('<br>'|safe) or '—' }}</td>
+    <td class="num" style="white-space:nowrap">{% if can('access', 2) %}
+      <a class="btn sm" href="{{ url_for('main.access_edit', eid=a.id) }}">Editar</a>
+      <form method="post" class="inline" action="{{ url_for('main.access_delete', eid=a.id) }}" data-confirm="¿Borrar lista?"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn sm danger">Borrar</button></form>
+    {% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}<div class="empty">Aún no hay listas de acceso.</div>{% endif %}
+</div>
+{% endblock %}

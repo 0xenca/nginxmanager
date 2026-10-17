@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{{ meta.title|capitalize }}{% endblock %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>{% if settings_mode %}Seguridad y ajustes globales{% elif eid %}Editar {{ meta.title }}{% else %}Nuevo {{ meta.title }}{% endif %}</h1>
+    {% if settings_mode %}<p>Se aplican a todo nginx. Al guardar se valida con <code>nginx -t</code> y, si falla, no se aplica nada.</p>{% endif %}
+  </div>
+  {% if eid and table == 'hosts' %}<a class="btn" href="{{ url_for('main.host_config', eid=eid) }}">Ver config generada</a>{% endif %}
+</div>
+<form method="post" class="form card" autocomplete="off">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  {% for f in fields %}
+    {% if f.admin_only and not g.user.is_admin %}
+    {% elif f.type == 'section' %}
+      <div class="fsec" {% if f.show_if %}data-show-if='{{ f.show_if|tojson }}'{% endif %}>{{ f.label }}</div>
+    {% else %}
+      {% set v = values.get(f.name, '') %}
+      <div class="field" {% if f.show_if %}data-show-if='{{ f.show_if|tojson }}'{% endif %}>
+        <label for="f_{{ f.name }}">{{ f.label }}{% if f.required %} *{% endif %}</label>
+        <div>
+        {% if f.type == 'bool' %}
+          <label class="switch"><input type="checkbox" id="f_{{ f.name }}" name="{{ f.name }}" {{ 'checked' if v }}></label>
+        {% elif f.type == 'select' %}
+          <select id="f_{{ f.name }}" name="{{ f.name }}">
+            {% for val, lbl in f.options %}<option value="{{ val }}" {{ 'selected' if val|string == v|string }}>{{ lbl }}</option>{% endfor %}
+          </select>
+        {% elif f.type == 'textarea' %}
+          <textarea id="f_{{ f.name }}" name="{{ f.name }}" rows="{{ f.rows or 3 }}" class="{{ 'mono' if f.mono }}" spellcheck="false">{{ v }}</textarea>
+        {% else %}
+          <input type="{{ 'number' if f.type == 'number' else 'text' }}" id="f_{{ f.name }}" name="{{ f.name }}" value="{{ v }}" placeholder="{{ f.placeholder or '' }}" spellcheck="false">
+        {% endif %}
+        {% if f.help %}<div class="help">{{ f.help }}</div>{% endif %}
+        </div>
+      </div>
+    {% endif %}
+  {% endfor %}
+  {% if not settings_mode or can('security', 2) %}
+  <div class="formbar">
+    <button class="btn primary">Guardar y aplicar</button>
+    {% if not settings_mode %}<a class="btn" href="{{ url_for(meta.list) }}">Cancelar</a>{% endif %}
+  </div>
+  {% endif %}
+</form>
+{% endblock %}

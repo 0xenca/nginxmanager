@@ -1,0 +1,194 @@
+# Generado por nginx-panel. NO editar a mano: se sobrescribe en cada cambio.
+# Original guardado en {{ nginx_dir }}/nginx.conf.panel-orig
+user {{ env.user }};
+worker_processes auto;
+worker_rlimit_nofile 65535;
+pid {{ pid_file }};
+{% for inc in env.module_includes %}
+include {{ inc }};
+{% endfor %}
+{% if env.stream_load %}
+load_module {{ env.stream_load }};
+{% endif %}
+
+events {
+    worker_connections 8192;
+    multi_accept on;
+}
+
+http {
+    include {{ nginx_dir }}/mime.types;
+    default_type application/octet-stream;
+
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 30s;
+    keepalive_requests 1000;
+    server_tokens off;
+    types_hash_max_size 4096;
+    server_names_hash_bucket_size 128;
+    server_names_hash_max_size 4096;
+    variables_hash_bucket_size 128;
+    map_hash_bucket_size 128;
+
+    # --- anti slowloris / tamaños ---
+    client_max_body_size {{ s.client_max_body_size }};
+    client_body_timeout 15s;
+    client_header_timeout 15s;
+    send_timeout 30s;
+    reset_timedout_connection on;
+    large_client_header_buffers 4 16k;
+
+{% if s.trusted_proxies and env.has_realip %}
+    # --- IP real detrás de proxies de confianza ---
+{% for p in s.trusted_proxies %}
+    set_real_ip_from {{ p }};
+{% endfor %}
+    real_ip_header X-Forwarded-For;
+    real_ip_recursive on;
+
+{% endif %}
+    # --- logs (JSON, una línea por petición; los lee el panel) ---
+    log_format panel_json escape=json '{"time":"$time_iso8601","ip":"$remote_addr","host":"$host",'
+        '"method":"$request_method","uri":"$request_uri","status":$status,"bytes":$body_bytes_sent,'
+        '"rt":$request_time,"urt":"$upstream_response_time","referer":"$http_referer",'
+        '"ua":"$http_user_agent","proto":"$server_protocol","cache":"$upstream_cache_status",'
+        '"tls":"$ssl_protocol","waf":"$panel_waf","hid":"$panel_host_id"}';
+    access_log {{ log_dir }}/access.log panel_json;
+    error_log {{ log_dir }}/error.log warn;
+
+{% if s.gzip %}
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml text/javascript application/javascript application/json
+               application/xml application/rss+xml application/wasm image/svg+xml font/ttf font/otf;
+
+{% endif %}
+    # --- TLS (perfil "intermediate" de Mozilla) ---
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:panel_ssl:20m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    # --- valores por defecto de variables de log (peticiones rechazadas antes de 'set') ---
+    map $host $panel_waf { default ""; }
+    map $host $panel_host_id { default "-"; }
+
+    # --- websockets ---
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        ''      '';
+    }
+
+    # --- caché: no cachear peticiones con sesión ---
+    map $http_cookie $panel_has_session {
+        default 0;
+        "~*(session|sess_|sid=|auth|token|wordpress_logged_in|laravel_session|phpsessid|jsessionid)" 1;
+    }
+    proxy_cache_path {{ cache_dir }} levels=1:2 keys_zone=panel_cache:{{ s.cache_keys_zone_mb }}m
+                     max_size={{ s.cache_max_size }} inactive=7d use_temp_path=off;
+
+    # --- límites por IP ---
+    limit_req_zone $binary_remote_addr zone=panel_rl:20m rate={{ s.rate_limit_rps }}r/s;
+    limit_conn_zone $binary_remote_addr zone=panel_conn:{{ s.conn_limit_zone_mb }}m;
+    limit_req_status 429;
+    limit_conn_status 429;
+
+    # --- lista negra global ---
+    geo $panel_blocked {
+        default 0;
+{% for c in s.blocklist %}
+        {{ "0.0.0.0/0" if c == "all" else c }} 1;
+{% endfor %}
+    }
+
+    # --- WAF básico ---
+    include {{ managed }}/snippets/waf_maps.conf;
+
+    # --- servidor por defecto: nada que no coincida con un dominio configurado ---
+    # (uno por cada IP concreta usada por algún host: nginx elige el default por dirección)
+    server {
+        listen 80 default_server;
+{% if ipv6 %}
+        listen [::]:80 default_server;
+{% endif %}
+{% for a in extra_addrs %}
+        listen {{ a }}:80 default_server;
+{% endfor %}
+        server_name _;
+        set $panel_host_id "default";
+        set $panel_waf "";
+        location ^~ /.well-known/acme-challenge/ {
+            root {{ acme_root }};
+            default_type text/plain;
+            try_files $uri =404;
+        }
+        location / {
+            return {{ 444 if s.default_behavior == "drop" else 404 }};
+        }
+    }
+    server {
+        listen 443 ssl default_server;
+{% if ipv6 %}
+        listen [::]:443 ssl default_server;
+{% endif %}
+{% for a in extra_addrs %}
+        listen {{ a }}:443 ssl default_server;
+{% endfor %}
+        server_name _;
+        set $panel_host_id "default";
+        set $panel_waf "";
+{% if env.reject_handshake %}
+        ssl_reject_handshake on;
+{% else %}
+        ssl_certificate {{ default_cert.fullchain }};
+        ssl_certificate_key {{ default_cert.key }};
+        return 444;
+{% endif %}
+    }
+{% if env.has_stub_status %}
+
+    # --- métricas internas para el panel ---
+    server {
+        listen 127.0.0.1:{{ status_port }};
+        server_name _;
+        access_log off;
+        set $panel_host_id "status";
+        set $panel_waf "";
+        location = /nginx_status { stub_status; }
+        location / { return 404; }
+    }
+{% endif %}
+
+    include {{ managed }}/upstreams/*.conf;
+    include {{ managed }}/hosts/*.conf;
+{% if s.include_legacy %}
+    include {{ nginx_dir }}/conf.d/*.conf;
+    include {{ nginx_dir }}/sites-enabled/*;
+{% endif %}
+{% if s.http_custom %}
+
+    # --- personalizado ---
+    {{ s.http_custom | indent(4) }}
+{% endif %}
+}
+{% if has_streams %}
+
+stream {
+    log_format panel_stream escape=json '{"time":"$time_iso8601","ip":"$remote_addr","proto":"$protocol",'
+        '"port":$server_port,"status":$status,"sent":$bytes_sent,"recv":$bytes_received,'
+        '"dur":$session_time,"upstream":"$upstream_addr"}';
+    access_log {{ log_dir }}/stream.log panel_stream;
+    error_log {{ log_dir }}/stream_error.log warn;
+{% for c in s.blocklist %}
+    deny {{ c }};
+{% endfor %}
+    include {{ managed }}/streams/*.conf;
+}
+{% endif %}

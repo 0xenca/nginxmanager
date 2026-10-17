@@ -1,0 +1,38 @@
+# Stream {{ st.id }}: {{ st.name }}
+upstream panel_stream_{{ st.id }} {
+{% if st.method == "least_conn" %}
+    least_conn;
+{% elif st.method == "hash_ip" %}
+    hash $remote_addr consistent;
+{% endif %}
+{% for sv in st.targets %}
+    server {{ sv.host }}:{{ sv.port }}{% if sv.weight != 1 %} weight={{ sv.weight }}{% endif %} max_fails=3 fail_timeout=30s{% if sv.backup %} backup{% endif %}{% if sv.down %} down{% endif %};
+{% endfor %}
+}
+server {
+{% for proto in (["tcp", "udp"] if st.protocol == "both" else [st.protocol]) %}
+{% set sfx = " udp" if proto == "udp" else "" %}
+{% if laddr %}
+    listen {{ laddr }}:{{ st.listen_port }}{{ sfx }};
+{% else %}
+    listen {{ st.listen_port }}{{ sfx }};
+{% if ipv6 %}
+    listen [::]:{{ st.listen_port }}{{ sfx }};
+{% endif %}
+{% endif %}
+{% endfor %}
+    proxy_pass panel_stream_{{ st.id }};
+    proxy_connect_timeout {{ st.connect_timeout }};
+    proxy_timeout {{ st.proxy_timeout }};
+{% if acl %}
+{% for c in acl.deny %}
+    deny {{ c }};
+{% endfor %}
+{% for c in acl.allow %}
+    allow {{ c }};
+{% endfor %}
+{% if acl.default_action == "deny" %}
+    deny all;
+{% endif %}
+{% endif %}
+}

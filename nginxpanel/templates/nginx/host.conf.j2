@@ -1,0 +1,185 @@
+# Host {{ h.id }}: {{ h.domains | join(", ") }}
+{% set ssl = cert is not none %}
+{% set is_proxy = h.get("type", "proxy") == "proxy" %}
+{% macro listen80() %}
+{% if laddr %}
+    listen {{ laddr }}:80;
+{% else %}
+    listen 80;
+{% if ipv6 %}
+    listen [::]:80;
+{% endif %}
+{% for a in also_addrs %}
+    listen {{ a }}:80;
+{% endfor %}
+{% endif %}
+{% endmacro %}
+{% macro guards() %}
+    server_name {{ h.domains | join(" ") }};
+    set $panel_host_id "{{ h.id }}";
+    set $panel_waf "";
+    if ($panel_blocked) {
+        set $panel_waf "blocklist";
+        return 403;
+    }
+{% if h.waf %}
+    if ($waf_block != "") {
+        set $panel_waf $waf_block;
+        return 403;
+    }
+{% endif %}
+{% endmacro %}
+{% macro acme() %}
+    location ^~ /.well-known/acme-challenge/ {
+        root {{ acme_root }};
+        default_type text/plain;
+        try_files $uri =404;
+        allow all;
+        auth_basic off;
+    }
+{% endmacro %}
+{% macro headers() %}
+{% if h.sec_headers %}
+        include {{ managed }}/snippets/security_headers.conf;
+{% endif %}
+{% if ssl and h.hsts %}
+        add_header Strict-Transport-Security "max-age=31536000" always;
+{% endif %}
+{% endmacro %}
+{% macro proxy(cache) %}
+{% if backend %}
+        proxy_pass {{ h.forward_scheme }}://panel_up_{{ backend.id }};
+{% else %}
+        proxy_pass {{ h.forward_scheme }}://{{ h.forward_host }}:{{ h.forward_port }};
+{% endif %}
+        include {{ managed }}/snippets/proxy.conf;
+{% if h.forward_scheme == "https" %}
+        proxy_ssl_server_name on;
+{% if backend %}
+        proxy_ssl_name $host;
+{% endif %}
+{% if h.upstream_ssl_verify %}
+        proxy_ssl_verify on;
+        proxy_ssl_trusted_certificate {{ env.ca_bundle }};
+{% else %}
+        proxy_ssl_verify off;
+{% endif %}
+{% endif %}
+{% if h.websocket %}
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+{% else %}
+        proxy_read_timeout {{ h.get("read_timeout") or "60s" }};
+        proxy_send_timeout 60s;
+{% endif %}
+{% if h.rate_limit %}
+        limit_req zone=panel_rl burst={{ h.rate_burst }} nodelay;
+{% endif %}
+{% if cache == "static" %}
+        proxy_cache panel_cache;
+        proxy_cache_valid 200 301 302 {{ h.cache_ttl }};
+        proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+        proxy_cache_lock on;
+        proxy_cache_bypass $http_authorization;
+        proxy_no_cache $http_authorization;
+        add_header X-Cache-Status $upstream_cache_status always;
+{% elif cache == "all" %}
+        proxy_cache panel_cache;
+        proxy_cache_valid 200 301 302 {{ h.cache_ttl }};
+        proxy_cache_valid 404 1m;
+        proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+        proxy_cache_background_update on;
+        proxy_cache_lock on;
+        proxy_cache_bypass $http_authorization $panel_has_session;
+        proxy_no_cache $http_authorization $panel_has_session;
+        add_header X-Cache-Status $upstream_cache_status always;
+{% endif %}
+{{ headers() }}
+{%- endmacro %}
+{% if ssl and h.force_ssl %}
+server {
+{{ listen80() }}
+{{ guards() }}
+{{ acme() }}
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+{% endif %}
+server {
+{% if not (ssl and h.force_ssl) %}
+{{ listen80() }}
+{% endif %}
+{% if ssl %}
+{% set h2legacy = " http2" if (h.http2 and env.has_http2 and not env.http2_directive) else "" %}
+{% if laddr %}
+    listen {{ laddr }}:443 ssl{{ h2legacy }};
+{% else %}
+    listen 443 ssl{{ h2legacy }};
+{% if ipv6 %}
+    listen [::]:443 ssl{{ h2legacy }};
+{% endif %}
+{% for a in also_addrs %}
+    listen {{ a }}:443 ssl{{ h2legacy }};
+{% endfor %}
+{% endif %}
+{% if h.http2 and env.has_http2 and env.http2_directive %}
+    http2 on;
+{% endif %}
+    ssl_certificate {{ cert.fullchain }};
+    ssl_certificate_key {{ cert.key }};
+{% endif %}
+{{ guards() }}
+{% if h.max_body %}
+    client_max_body_size {{ h.max_body }};
+{% endif %}
+{% if h.conn_limit %}
+    limit_conn panel_conn {{ h.conn_limit }};
+{% endif %}
+{% if acl %}
+    # Lista de acceso: {{ acl.name }}
+{% for c in acl.deny %}
+    deny {{ c }};
+{% endfor %}
+{% for c in acl.allow %}
+    allow {{ c }};
+{% endfor %}
+{% if acl.default_action == "deny" and (acl.allow or acl.deny or not acl.auth_users) %}
+    deny all;
+{% endif %}
+{% if acl.auth_users %}
+    satisfy {{ acl.satisfy }};
+    auth_basic "Acceso restringido";
+    auth_basic_user_file {{ managed }}/htpasswd/access_{{ acl.id }};
+{% endif %}
+{% endif %}
+
+{{ acme() }}
+{% if is_proxy %}
+{% if h.cache_mode == "static" %}
+    location ~* \.(css|js|mjs|map|png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|otf|eot|mp4|webm|pdf)$ {
+{{ proxy("static") }}
+    }
+
+{% endif %}
+    location / {
+{{ proxy("all" if h.cache_mode == "all" else "off") }}
+{% if h.custom_location %}
+        # --- personalizado ---
+        {{ h.custom_location | indent(8) }}
+{% endif %}
+    }
+{% else %}
+    location / {
+{{ headers() }}
+        return {{ h.redirect_code }} {{ h.redirect_url.rstrip("/") if h.preserve_path else h.redirect_url }}{% if h.preserve_path %}$request_uri{% endif %};
+    }
+{% endif %}
+{% if h.custom_server %}
+
+    # --- personalizado ---
+    {{ h.custom_server | indent(4) }}
+{% endif %}
+}

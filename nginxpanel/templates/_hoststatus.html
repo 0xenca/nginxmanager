@@ -1,0 +1,17 @@
+{% macro status_cell(st) %}
+{%- if not st -%}
+<span class="hs hs-none" title="Sin comprobar todavía">— sin comprobar</span>
+{%- else -%}
+<details class="hsd">
+  <summary class="hs hs-{{ st.level }}"><span class="hsdot"></span><span class="hstext">{{ st.summary }}</span></summary>
+  {% if st.checks %}
+  <div class="hspanel">
+    <table class="dense">
+      {% for c in st.checks %}<tr><td class="hsname"><span class="hsdot lv-{{ c.level }}"></span>{{ c.name }}</td><td>{{ c.detail }}</td></tr>{% endfor %}
+    </table>
+    <div class="muted" style="font-size:11.5px;margin-top:6px">Comprobado desde el propio servidor · {{ st.ts|dt('%d/%m %H:%M:%S') }}</div>
+  </div>
+  {% endif %}
+</details>
+{%- endif -%}
+{% endmacro %}

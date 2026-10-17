@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Usuario{% endblock %}
+{% block content %}
+<div class="head"><div><h1>{{ 'Editar ' ~ u.username if u else 'Nuevo usuario' }}</h1></div></div>
+<form method="post" class="form card" autocomplete="off">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <div class="field"><label>Usuario</label><div><input type="text" name="username" value="{{ form.get('username') or (u.username if u else '') }}" required></div></div>
+  <div class="field"><label>Contraseña</label><div><input type="password" name="password" autocomplete="new-password" {{ '' if u else 'required' }}><div class="help">Mínimo 10 caracteres.{% if u %} Déjala vacía para no cambiarla.{% endif %}</div></div></div>
+  <div class="field"><label>Activo</label><div><label class="switch"><input type="checkbox" name="active" {{ 'checked' if (not u or u.active) }}></label></div></div>
+  {% if g.user.is_admin %}
+  <div class="field"><label>Administrador</label><div><label class="switch"><input type="checkbox" name="is_admin" {{ 'checked' if u and u.is_admin }}></label><div class="help">Acceso total. Úsalo solo para quien administra el servidor.</div></div></div>
+  {% endif %}
+  {% if u and u.totp_enabled %}
+  <div class="field"><label>Restablecer 2FA</label><div><label class="switch"><input type="checkbox" name="reset_2fa"></label><div class="help">Si ha perdido el móvil.</div></div></div>
+  {% endif %}
+  <div class="fsec">Permisos (si no es administrador)</div>
+  <table class="perm-grid">
+    <tr><th>Área</th>{% for lv, lbl in LEVELS.items() %}<th>{{ lbl }}</th>{% endfor %}</tr>
+    {% for area, lbl in AREAS.items() %}
+    {% set cur = (form.get('perm_' ~ area)|int) if form.get('perm_' ~ area) else (u.perms.get(area, 0) if u else 0) %}
+    <tr><td>{{ lbl }}</td>{% for lv in LEVELS %}<td><input type="radio" name="perm_{{ area }}" value="{{ lv }}" {{ 'checked' if cur == lv }}></td>{% endfor %}</tr>
+    {% endfor %}
+  </table>
+  <div class="formbar"><button class="btn primary">Guardar</button><a class="btn" href="{{ url_for('main.users') }}">Cancelar</a></div>
+</form>
+{% endblock %}

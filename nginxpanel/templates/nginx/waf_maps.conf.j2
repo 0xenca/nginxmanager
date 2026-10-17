@@ -1,0 +1,54 @@
+# WAF básico generado por nginx-panel. Cada map devuelve el motivo ("" = limpio).
+# No sustituye a un WAF real (ModSecurity/Coraza): corta el ruido automatizado y
+# los patrones de explotación más comunes con muy pocos falsos positivos.
+
+map $request_uri $waf_uri {
+    default "";
+{% if s.waf_injection %}
+    "~*(\.\./|\.\.%2f|%2e%2e(/|%2f|%5c)|\.\.%5c)"                                  "traversal";
+    "~*(/etc/(passwd|shadow)|/proc/self/environ|win\.ini|boot\.ini)"               "lfi";
+    "~*union(\s|%20|\+|/\*.*\*/|%2f%2a.*%2a%2f)+(all(\s|%20|\+)+)?select"          "sqli";
+    "~*(information_schema|sleep(\s|%20)*(\(|%28)\d|benchmark(\s|%20)*(\(|%28)|waitfor(\s|%20|\+)+delay|pg_sleep)" "sqli";
+    "~*(%27|')(\s|%20|\+)*(or|and)(\s|%20|\+)+(%27|')?\d+(%27|')?(\s|%20|\+)*(=|%3d)" "sqli";
+    "~*((<|%3c)(\s|%20|/)*script|javascript(:|%3a)|on(error|load|mouseover|focus)(\s|%20)*(=|%3d)|document\.cookie)" "xss";
+    "~*(\$\{jndi:|%24%7bjndi|\$%7bjndi)"                                           "log4shell";
+    "~*(php://(input|filter)|allow_url_include|auto_prepend_file|data://text)"   "php_wrapper";
+    "~*(base64_decode|shell_exec|passthru|proc_open)(\s|%20)*(\(|%28)"               "rce";
+{% endif %}
+}
+
+map $uri $waf_probe {
+    default "";
+{% if s.waf_probes %}
+    "~*/\.(env|git|svn|hg|bzr|ds_store|htaccess|htpasswd|aws|ssh|docker|vscode|idea)(/|\.|$)" "probe";
+    "~*/(phpmyadmin|pma|myadmin|mysqladmin|adminer)(\.php)?(/|$)"                      "probe";
+    "~*/(vendor/phpunit|_ignition/execute-solution|boaform|hnap1|cgi-bin/luci|server-status)" "probe";
+    "~*/(wp-config\.php|config\.php\.(bak|old|save)|web\.config|composer\.(json|lock)|docker-compose\.ya?ml)$" "probe";
+    "~*\.(sql|sql\.gz|bak|old|swp|backup)$"                                            "probe_backup";
+{% endif %}
+}
+
+map $http_user_agent $waf_ua {
+    default "";
+{% if s.waf_scanners %}
+    "~*(sqlmap|nikto|nmap|masscan|zgrab|wpscan|acunetix|nessus|openvas|dirbuster|gobuster|ffuf|feroxbuster|nuclei|wfuzz|jaeles|whatweb|zmeu|netsparker|appscan|w3af|commix|xsstrike|havij|morfeus)" "scanner";
+{% endif %}
+{% if s.waf_injection %}
+    "~*(\$\{jndi:|%24%7bjndi)"                                                     "log4shell";
+{% endif %}
+{% if s.waf_empty_ua %}
+    ""                                                                              "empty_ua";
+{% endif %}
+}
+
+map $request_method $waf_method {
+    default "";
+{% if s.waf_bad_methods %}
+    "~^(TRACE|TRACK|DEBUG)$" "method";
+{% endif %}
+}
+
+map "$waf_uri$waf_probe$waf_ua$waf_method" $waf_block {
+    ""      "";
+    default "$waf_uri$waf_probe$waf_ua$waf_method";
+}

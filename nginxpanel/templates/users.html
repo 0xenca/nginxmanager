@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Usuarios{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Usuarios</h1><p>Permisos por área: sin acceso, ver o gestionar. Los administradores lo pueden todo, incluidas las directivas personalizadas.</p></div>
+  {% if can('users', 2) %}<a class="btn primary" href="{{ url_for('main.user_new') }}">+ Nuevo usuario</a>{% endif %}</div>
+<div class="card table-wrap">
+<table>
+  <tr><th>Usuario</th><th>Rol / permisos</th><th>2FA</th><th>Último acceso</th><th></th></tr>
+  {% for u in users %}
+  <tr class="{{ '' if u.active else 'off' }}">
+    <td><b>{{ u.username }}</b>{% if not u.active %} <span class="tag">desactivado</span>{% endif %}</td>
+    <td>{% if u.is_admin %}<span class="tag ok">administrador</span>{% else %}{% for a, lv in u.perms.items() if lv %}<span class="tag {{ 'warn' if lv == 2 }}">{{ a }}{{ ' ✎' if lv == 2 }}</span>{% else %}<span class="muted">sin permisos</span>{% endfor %}{% endif %}</td>
+    <td>{{ '✔' if u.totp_enabled else '—' }}</td>
+    <td>{{ u.last_login|dt }}</td>
+    <td class="num" style="white-space:nowrap">{% if can('users', 2) and (g.user.is_admin or not u.is_admin) %}
+      <a class="btn sm" href="{{ url_for('main.user_edit', uid=u.id) }}">Editar</a>
+      {% if u.id != g.user.id %}<form method="post" class="inline" action="{{ url_for('main.user_delete', uid=u.id) }}" data-confirm="¿Borrar {{ u.username }}?"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn sm danger">Borrar</button></form>{% endif %}
+    {% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}
