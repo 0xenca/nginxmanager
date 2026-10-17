@@ -1,4 +1,4 @@
-"""Factoría de la app Flask."""
+"""Flask app factory."""
 import ipaddress
 import time
 from datetime import timedelta
@@ -36,7 +36,7 @@ def create_app():
         except ValueError:
             abort(403)
         if not any(ip in n for n in allowed):
-            return "Acceso al panel no permitido desde esta red.", 403
+            return "Access to the panel is not allowed from this network.", 403
         return None
 
     @app.before_request
@@ -70,7 +70,7 @@ def create_app():
         }
 
     @app.template_filter("dt")
-    def fmt_dt(ts, fmt="%d/%m/%Y %H:%M"):
+    def fmt_dt(ts, fmt="%Y-%m-%d %H:%M"):
         if not ts:
             return "—"
         return time.strftime(fmt, time.localtime(ts))

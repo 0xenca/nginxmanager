@@ -1,2 +1,2 @@
 Flask>=3.0,<4
-gunicorn>=25.1   # --no-control-socket existe desde 25.1
+gunicorn>=25.1   # --no-control-socket exists since 25.1

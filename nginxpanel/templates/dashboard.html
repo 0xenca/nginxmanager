@@ -1,55 +1,55 @@
 {% extends "base.html" %}
-{% block title %}Resumen{% endblock %}
+{% block title %}Overview{% endblock %}
 {% block content %}
 <div class="head">
-  <div><h1>Resumen</h1>
-  <p>{% if env.installed %}<span class="dot {{ 'ok' if running else 'err' }}"></span>nginx {{ env.version }} {{ 'en marcha' if running else 'detenido' }}{% else %}<span class="dot err"></span>nginx no instalado{% endif %}</p></div>
+  <div><h1>Overview</h1>
+  <p>{% if env.installed %}<span class="dot {{ 'ok' if running else 'err' }}"></span>nginx {{ env.version }} {{ 'running' if running else 'stopped' }}{% else %}<span class="dot err"></span>nginx not installed{% endif %}</p></div>
   {% if can('system', 2) and env.installed %}
   <div class="actions">
-    <form method="post" action="{{ url_for('main.system_service', action='test') }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn">Probar config</button></form>
-    <form method="post" action="{{ url_for('main.system_service', action='reload') }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn">Recargar nginx</button></form>
+    <form method="post" action="{{ url_for('main.system_service', action='test') }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn">Test config</button></form>
+    <form method="post" action="{{ url_for('main.system_service', action='reload') }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn">Reload nginx</button></form>
   </div>
   {% endif %}
 </div>
 
 {% if not env.installed or not settings.bootstrapped %}
 <div class="card" style="border-left:4px solid var(--warn)">
-  <b>Primeros pasos.</b>
-  {% if not env.installed %}nginx no está instalado. Ve a <a href="{{ url_for('main.system') }}">Sistema</a> e instálalo.
-  {% else %}El panel aún no gestiona nginx. En <a href="{{ url_for('main.system') }}">Sistema</a> pulsa «Tomar el control de nginx».{% endif %}
+  <b>Getting started.</b>
+  {% if not env.installed %}nginx is not installed. Go to <a href="{{ url_for('main.system') }}">System</a> and install it.
+  {% else %}The panel does not manage nginx yet. In <a href="{{ url_for('main.system') }}">System</a>, click "Take control of nginx".{% endif %}
 </div>
 {% endif %}
 
 <div class="grid g4" style="margin-bottom:18px">
-  <div class="stat"><div class="k">Hosts</div><div class="v">{{ counts.enabled }}<span class="muted" style="font-size:15px"> / {{ counts.hosts }}</span></div><div class="s">activos / total</div></div>
+  <div class="stat"><div class="k">Hosts</div><div class="v">{{ counts.enabled }}<span class="muted" style="font-size:15px"> / {{ counts.hosts }}</span></div><div class="s">enabled / total</div></div>
   <div class="stat"><div class="k">Backends</div><div class="v">{{ counts.backends }}</div><div class="s">{{ counts.streams }} streams</div></div>
-  <div class="stat"><div class="k">Certificados</div><div class="v">{{ counts.certs }}</div><div class="s">{{ expiring|length }} caducan pronto</div></div>
-  <div class="stat"><div class="k">Conexiones activas</div><div class="v">{{ stub.active if stub else '—' }}</div><div class="s">{% if stub %}{{ stub.reading }} leyendo · {{ stub.writing }} escribiendo · {{ stub.waiting }} en espera{% else %}stub_status no disponible{% endif %}</div></div>
+  <div class="stat"><div class="k">Certificates</div><div class="v">{{ counts.certs }}</div><div class="s">{{ expiring|length }} expiring soon</div></div>
+  <div class="stat"><div class="k">Active connections</div><div class="v">{{ stub.active if stub else '—' }}</div><div class="s">{% if stub %}{{ stub.reading }} reading · {{ stub.writing }} writing · {{ stub.waiting }} waiting{% else %}stub_status not available{% endif %}</div></div>
 </div>
 
 {% if stats %}
-<h2>Últimas 24 horas</h2>
+<h2>Last 24 hours</h2>
 <div class="grid g4" style="margin-bottom:18px">
-  <div class="stat"><div class="k">Peticiones</div><div class="v">{{ "{:,}".format(stats.total).replace(",", ".") }}</div><div class="s">{{ stats.unique_ips }} IPs únicas</div></div>
-  <div class="stat"><div class="k">Tráfico</div><div class="v">{{ human_bytes(stats.bytes) }}</div><div class="s">p95 {{ stats.p95_ms }} ms</div></div>
-  <div class="stat"><div class="k">Errores 5xx</div><div class="v {{ 's5' if stats.error_rate > 1 }}">{{ stats.error_rate }}%</div><div class="s">media {{ stats.avg_ms }} ms</div></div>
-  <div class="stat"><div class="k">Bloqueadas</div><div class="v">{{ stats.blocked }}</div><div class="s">WAF + lista negra</div></div>
+  <div class="stat"><div class="k">Requests</div><div class="v">{{ "{:,}".format(stats.total) }}</div><div class="s">{{ stats.unique_ips }} unique IPs</div></div>
+  <div class="stat"><div class="k">Traffic</div><div class="v">{{ human_bytes(stats.bytes) }}</div><div class="s">p95 {{ stats.p95_ms }} ms</div></div>
+  <div class="stat"><div class="k">5xx errors</div><div class="v {{ 's5' if stats.error_rate > 1 }}">{{ stats.error_rate }}%</div><div class="s">avg {{ stats.avg_ms }} ms</div></div>
+  <div class="stat"><div class="k">Blocked</div><div class="v">{{ stats.blocked }}</div><div class="s">WAF + blocklist</div></div>
 </div>
 {% endif %}
 
 <div class="grid g2">
   {% if expiring %}
-  <div class="card"><h2>Certificados por caducar</h2>
-    <table>{% for c in expiring %}<tr><td>{{ c.name }}</td><td class="mono">{{ c.domains|join(', ') }}</td><td class="num"><span class="tag {{ 'err' if days_left(c) < 7 else 'warn' }}">{{ days_left(c) }} días</span></td></tr>{% endfor %}</table>
+  <div class="card"><h2>Expiring certificates</h2>
+    <table>{% for c in expiring %}<tr><td>{{ c.name }}</td><td class="mono">{{ c.domains|join(', ') }}</td><td class="num"><span class="tag {{ 'err' if days_left(c) < 7 else 'warn' }}">{{ days_left(c) }} days</span></td></tr>{% endfor %}</table>
   </div>
   {% endif %}
   {% if stats and stats.waf %}
-  <div class="card"><h2>Ataques bloqueados (24 h)</h2>
+  <div class="card"><h2>Blocked attacks (24 h)</h2>
     <div class="bars">{% set mx = stats.waf[0][1] %}{% for k, n in stats.waf %}<div class="bar" style="--w:{{ (n / mx * 100)|round }}%"><span class="lbl">{{ k }}</span><span class="n">{{ n }}</span></div>{% endfor %}</div>
   </div>
   {% endif %}
   {% if stats and stats.top_hosts %}
-  <div class="card"><h2>Hosts con más tráfico</h2>
+  <div class="card"><h2>Busiest hosts</h2>
     <div class="bars">{% set mx = stats.top_hosts[0][1] %}{% for k, n in stats.top_hosts[:8] %}<div class="bar" style="--w:{{ (n / mx * 100)|round }}%"><span class="lbl">{{ k }}</span><span class="n">{{ n }}</span></div>{% endfor %}</div>
   </div>
   {% endif %}

@@ -1,8 +1,8 @@
-"""CLI: python -m nginxpanel <comando>
+"""CLI: python -m nginxpanel <command>
 
-  create-admin USUARIO [--password X]   crea/restablece un administrador
-  apply                                 regenera la config de nginx desde la BD
-  serve [--host H] [--port P]           servidor de desarrollo (en producción: gunicorn)
+  create-admin USERNAME [--password X]  create/reset an administrator
+  apply                                 regenerate the nginx config from the DB
+  serve [--host H] [--port P]           development server (in production: gunicorn)
 """
 import argparse
 import getpass
@@ -19,7 +19,7 @@ def main():
     ca = sub.add_parser("create-admin")
     ca.add_argument("username")
     ca.add_argument("--password")
-    ca.add_argument("--random", action="store_true", help="genera una contraseña aleatoria")
+    ca.add_argument("--random", action="store_true", help="generate a random password")
     sub.add_parser("apply")
     sv = sub.add_parser("serve")
     sv.add_argument("--host", default="0.0.0.0")
@@ -33,27 +33,27 @@ def main():
         if a.random:
             pw = secrets.token_urlsafe(14)
         if not pw:
-            pw = getpass.getpass("Contraseña (10+ caracteres): ")
+            pw = getpass.getpass("Password (10+ characters): ")
         if not auth.password_ok(pw):
-            sys.exit("La contraseña debe tener al menos 10 caracteres")
+            sys.exit("The password must be at least 10 characters long")
         h = auth.hash_password(pw)
         row = conn.execute("SELECT id FROM users WHERE username=?", (a.username,)).fetchone()
         if row:
             conn.execute("UPDATE users SET password_hash=?, is_admin=1, active=1, totp_enabled=0, totp_secret=NULL "
                          "WHERE id=?", (h, row["id"]))
-            print(f"Administrador '{a.username}' restablecido (2FA desactivado).")
+            print(f"Administrator '{a.username}' reset (2FA disabled).")
         else:
             conn.execute("INSERT INTO users(username, password_hash, is_admin, perms, active, created_at) "
                          "VALUES (?,?,1,?,1,?)", (a.username, h, json.dumps({}), time.time()))
-            print(f"Administrador '{a.username}' creado.")
+            print(f"Administrator '{a.username}' created.")
         conn.commit()
         db.audit("cli", "localhost", "create-admin", a.username, db=conn)
         if a.random:
-            print(f"Contraseña: {pw}")
+            print(f"Password: {pw}")
     elif a.cmd == "apply":
         ok, out, warnings = nginx.apply(conn, label="cli")
         for w in warnings:
-            print("AVISO:", w)
+            print("WARNING:", w)
         print(out)
         if ok:
             db.set_settings({"bootstrapped": True}, db=conn)

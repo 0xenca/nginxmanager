@@ -1,4 +1,4 @@
-"""Detección del entorno, generación de la config y aplicación con rollback."""
+"""Environment detection, config generation and apply with rollback."""
 import fcntl
 import os
 import pwd
@@ -26,12 +26,12 @@ def run(cmd, timeout=60, env=None):
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
         return p.returncode, (p.stdout + p.stderr).strip()
     except FileNotFoundError:
-        return 127, f"No encontrado: {cmd[0]}"
+        return 127, f"Not found: {cmd[0]}"
     except subprocess.TimeoutExpired:
-        return 124, "Tiempo de espera agotado"
+        return 124, "Timed out"
 
 
-# ---------------- entorno ----------------
+# ---------------- environment ----------------
 
 def nginx_installed():
     return shutil.which(config.NGINX_BIN) is not None or Path(config.NGINX_BIN).is_file()
@@ -103,7 +103,7 @@ def detect_env():
 
 
 def local_ips():
-    """IPs configuradas en las interfaces del servidor (sin link-local)."""
+    """IPs configured on the server's interfaces (no link-local)."""
     ips = []
     code, out = run(["ip", "-o", "addr", "show"])
     if code == 0:
@@ -123,7 +123,7 @@ def local_ips():
 
 
 def _ips_from_kernel():
-    """Respaldo sin iproute2: IPv4 vía ioctl por interfaz, IPv6 vía /proc/net/if_inet6."""
+    """Fallback without iproute2: IPv4 via per-interface ioctl, IPv6 via /proc/net/if_inet6."""
     import fcntl as _f
     import ipaddress as _ip
     import socket
@@ -153,7 +153,7 @@ def _ips_from_kernel():
 
 
 def listen_addr(ip):
-    """'' -> '' ; IPv4 tal cual ; IPv6 entre corchetes (para 'listen')."""
+    """'' -> '' ; IPv4 as is ; IPv6 in brackets (for 'listen')."""
     if not ip:
         return ""
     return f"[{ip}]" if ":" in ip else ip
@@ -180,7 +180,7 @@ def stub_status():
         return None
 
 
-# ---------------- certificados (rutas) ----------------
+# ---------------- certificates (paths) ----------------
 
 def cert_paths(cert):
     if not cert:
@@ -196,7 +196,7 @@ def cert_paths(cert):
 
 
 def ensure_default_cert():
-    """Certificado autofirmado para el default_server en nginx < 1.19.4."""
+    """Self-signed certificate for the default_server on nginx < 1.19.4."""
     d = config.DATA_DIR / "certs" / "default"
     fc, key = d / "fullchain.pem", d / "privkey.pem"
     if not fc.exists():
@@ -210,7 +210,7 @@ def ensure_default_cert():
 # ---------------- render ----------------
 
 def render_all(db=None):
-    """Devuelve (nginx_conf, {ruta_relativa: contenido}, avisos)."""
+    """Returns (nginx_conf, {relative_path: content}, warnings)."""
     env = detect_env()
     s = get_settings(db)
     hosts = list_entities("hosts", db)
@@ -237,8 +237,8 @@ def render_all(db=None):
         if a.get("auth_users"):
             files[f"htpasswd/access_{a['id']}"] = "".join(f"{u['user']}:{u['hash']}\n" for u in a["auth_users"])
 
-    # IPs concretas usadas por algún host: nginx solo ofrece en IP:puerto los servers
-    # que escuchan exactamente ahí, así que los hosts "en todas" también deben declararlas.
+    # Specific IPs used by some host: on IP:port nginx only serves the servers that
+    # listen exactly there, so hosts on "all interfaces" must declare them too.
     extra_addrs = {listen_addr(h["listen_ip"]) for h in hosts
                    if h.get("enabled", True) and h.get("listen_ip")}
     for h in hosts:
@@ -247,13 +247,13 @@ def render_all(db=None):
         cert = certs.get(h.get("cert_id")) if h.get("cert_id") else None
         paths = cert_paths(cert) if cert else None
         if cert and not paths:
-            warnings.append(f"Host {', '.join(h['domains'])}: el certificado '{cert['name']}' aún no tiene "
-                            f"ficheros; se publica sin SSL.")
+            warnings.append(f"Host {', '.join(h['domains'])}: certificate '{cert['name']}' has no files "
+                            f"yet; publishing without SSL.")
         backend = None
         if h.get("type", "proxy") == "proxy" and h.get("forward_mode") == "backend":
             backend = backends.get(h.get("backend_id"))
             if not backend:
-                warnings.append(f"Host {', '.join(h['domains'])}: backend inexistente, omitido.")
+                warnings.append(f"Host {', '.join(h['domains'])}: backend does not exist, skipped.")
                 continue
         acl = acls.get(h.get("access_list_id")) if h.get("access_list_id") else None
         laddr = listen_addr(h.get("listen_ip") or "")
@@ -262,8 +262,8 @@ def render_all(db=None):
             also_addrs=sorted(extra_addrs), **common)
 
     if streams and not env["stream"]:
-        warnings.append("Este nginx no tiene el módulo stream: los streams no se publican. "
-                        "En Debian/Ubuntu: apt install libnginx-mod-stream.")
+        warnings.append("This nginx has no stream module: streams are not published. "
+                        "On Debian/Ubuntu: apt install libnginx-mod-stream.")
     active_streams = [st for st in streams if st.get("enabled", True)] if env["stream"] else []
     for st in active_streams:
         acl = acls.get(st.get("access_list_id")) if st.get("access_list_id") else None
@@ -280,10 +280,10 @@ def render_all(db=None):
 
 def render_host_preview(hid, db=None):
     _, files, _ = render_all(db)
-    return files.get(f"hosts/host_{hid}.conf", "# Host desactivado o sin generar")
+    return files.get(f"hosts/host_{hid}.conf", "# Host disabled or not generated")
 
 
-# ---------------- aplicar ----------------
+# ---------------- apply ----------------
 
 @contextmanager
 def apply_lock():
@@ -346,7 +346,7 @@ def has_systemd():
 
 def reload_nginx():
     if config.DRY_RUN:
-        return True, "DRY_RUN: recarga omitida"
+        return True, "DRY_RUN: reload skipped"
     if nginx_running():
         code, out = run([config.NGINX_BIN, "-s", "reload", "-c", str(config.NGINX_CONF)])
     elif has_systemd():
@@ -370,9 +370,9 @@ def ensure_dirs(env):
 
 
 def apply(db=None, label="auto"):
-    """Genera, valida con nginx -t y recarga. Si falla, restaura lo anterior."""
+    """Generates, validates with nginx -t and reloads. On failure, restores the previous config."""
     if not nginx_installed():
-        return False, "nginx no está instalado.", []
+        return False, "nginx is not installed.", []
     nginx_conf, files, warnings = render_all(db)
     env = detect_env()
     with apply_lock():
@@ -400,18 +400,18 @@ def apply(db=None, label="auto"):
                 old.rename(config.MANAGED_DIR)
             if prev_conf is not None:
                 config.NGINX_CONF.write_text(prev_conf)
-            return False, "nginx -t ha fallado; se ha restaurado la configuración anterior.\n\n" + out, warnings
+            return False, "nginx -t failed; the previous configuration has been restored.\n\n" + out, warnings
         shutil.rmtree(old, ignore_errors=True)
         ok, rout = reload_nginx()
         if not ok:
-            return False, "La configuración es válida pero la recarga falló:\n" + rout, warnings
+            return False, "The configuration is valid but the reload failed:\n" + rout, warnings
         return True, out, warnings
 
 
 def restore_backup(name, db=None):
     src = config.BACKUP_DIR / name
     if not src.is_dir() or "/" in name or name.startswith("."):
-        return False, "Backup no encontrado"
+        return False, "Backup not found"
     with apply_lock():
         backup_current("pre-restore")
         prev_conf = config.NGINX_CONF.read_text() if config.NGINX_CONF.exists() else None
@@ -438,7 +438,7 @@ def restore_backup(name, db=None):
 
 def service_action(action):
     if config.DRY_RUN:
-        return True, f"DRY_RUN: {action} omitido"
+        return True, f"DRY_RUN: {action} skipped"
     if action == "reload":
         code, out = test_config()
         if code != 0:
@@ -451,10 +451,10 @@ def service_action(action):
                 return False, out
         code, out = run(["systemctl", action, "nginx"])
         return code == 0, out or f"{action} OK"
-    return False, "Acción no soportada en este sistema"
+    return False, "Action not supported on this system"
 
 
-# ---------------- instalación ----------------
+# ---------------- installation ----------------
 
 def install_commands():
     if shutil.which("apt-get"):

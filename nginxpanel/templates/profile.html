@@ -1,31 +1,31 @@
 {% extends "base.html" %}
-{% block title %}Mi cuenta{% endblock %}
+{% block title %}My account{% endblock %}
 {% block content %}
-<div class="head"><div><h1>Mi cuenta · {{ g.user.username }}</h1></div></div>
+<div class="head"><div><h1>My account · {{ g.user.username }}</h1></div></div>
 <div class="grid g2">
 <form method="post" class="card">
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="password">
-  <h2>Cambiar contraseña</h2>
-  <p><input type="password" name="current" placeholder="Contraseña actual" autocomplete="current-password" required></p>
-  <p><input type="password" name="new" placeholder="Nueva (10+ caracteres)" autocomplete="new-password" required></p>
-  <p><input type="password" name="confirm" placeholder="Repite la nueva" autocomplete="new-password" required></p>
-  <button class="btn primary">Cambiar</button>
+  <h2>Change password</h2>
+  <p><input type="password" name="current" placeholder="Current password" autocomplete="current-password" required></p>
+  <p><input type="password" name="new" placeholder="New (10+ characters)" autocomplete="new-password" required></p>
+  <p><input type="password" name="confirm" placeholder="Repeat the new one" autocomplete="new-password" required></p>
+  <button class="btn primary">Change</button>
 </form>
 <div class="card">
-  <h2>Verificación en dos pasos</h2>
+  <h2>Two-step verification</h2>
   {% if g.user.totp_enabled %}
-    <p><span class="tag ok">activada</span></p>
+    <p><span class="tag ok">enabled</span></p>
     <form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="2fa_disable">
-      <p><input type="text" name="code" placeholder="Código actual para desactivar" inputmode="numeric" required></p><button class="btn danger">Desactivar</button></form>
+      <p><input type="text" name="code" placeholder="Current code to disable" inputmode="numeric" required></p><button class="btn danger">Disable</button></form>
   {% elif setup_secret %}
-    <p>Escanea el código con Google Authenticator, Aegis, 1Password…</p>
+    <p>Scan the code with Google Authenticator, Aegis, 1Password…</p>
     <div id="qrcode" data-uri="{{ setup_uri }}" style="background:#fff;padding:10px;display:inline-block;border-radius:6px"></div>
-    <p class="muted">O introduce a mano: <code>{{ setup_secret }}</code></p>
+    <p class="muted">Or enter it manually: <code>{{ setup_secret }}</code></p>
     <form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="2fa_confirm">
-      <p><input type="text" name="code" placeholder="Código de 6 dígitos" inputmode="numeric" autofocus required></p><button class="btn primary">Confirmar y activar</button></form>
+      <p><input type="text" name="code" placeholder="6-digit code" inputmode="numeric" autofocus required></p><button class="btn primary">Confirm and enable</button></form>
   {% else %}
-    <p class="muted">Muy recomendable: este panel controla el servidor con privilegios de root.</p>
-    <form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="2fa_start"><button class="btn primary">Activar 2FA</button></form>
+    <p class="muted">Highly recommended: this panel controls the server with root privileges.</p>
+    <form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="2fa_start"><button class="btn primary">Enable 2FA</button></form>
   {% endif %}
 </div>
 </div>

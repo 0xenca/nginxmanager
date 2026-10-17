@@ -1,4 +1,4 @@
-"""Lectura, filtrado, exportación y analíticas de los logs JSON de nginx."""
+"""Reading, filtering, exporting and analytics of nginx JSON logs."""
 import collections
 import csv
 import gzip
@@ -19,7 +19,7 @@ ERR_TS = re.compile(r"^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})")
 
 
 def log_files(kind):
-    """Ficheros de un tipo (incluye rotados .1, .2.gz…), del más antiguo al más nuevo."""
+    """Files of one kind (including rotated .1, .2.gz…), oldest to newest."""
     if not config.LOG_DIR.exists():
         return []
     files = [p for p in config.LOG_DIR.glob(f"{kind}.log*") if p.is_file()]
@@ -58,7 +58,7 @@ def _ts(s):
 
 
 def parse_dt(s):
-    """'2026-10-01T10:00' (datetime-local) -> epoch local."""
+    """'2026-10-01T10:00' (datetime-local) -> local epoch."""
     if not s:
         return None
     try:
@@ -67,7 +67,7 @@ def parse_dt(s):
         return None
 
 
-# ---------------- filtros ----------------
+# ---------------- filters ----------------
 
 class Filter:
     def __init__(self, args):
@@ -79,7 +79,7 @@ class Filter:
             try:
                 self.net = ipaddress.ip_network(self.ip_raw, strict=False)
             except ValueError:
-                self.net = None   # se usa como prefijo de texto
+                self.net = None   # used as a text prefix
         self.host = (args.get("host") or "").strip().lower()
         self.status = (args.get("status") or "").strip().lower()
         self.method = (args.get("method") or "").strip().upper()
@@ -88,7 +88,7 @@ class Filter:
         self.waf = args.get("waf") in ("1", "on", "true")
         self.port = (args.get("port") or "").strip()
         self.text = (args.get("q") or "").strip().lower()
-        self.hids = None   # conjunto de ids de host (filtro por grupo); lo fija la vista
+        self.hids = None   # set of host ids (group filter); set by the view
 
     def as_dict(self):
         return {k: v for k, v in vars(self).items() if k != "net"}
@@ -106,7 +106,7 @@ class Filter:
         return str(st) == f
 
     def raw_precheck(self, line):
-        """Descarte rápido antes de parsear JSON."""
+        """Fast rejection before parsing JSON."""
         if self.ip_raw and not self.net and self.ip_raw not in line:
             return False
         if self.net and self.net.prefixlen == self.net.max_prefixlen and str(self.net.network_address) not in line:
@@ -152,7 +152,7 @@ class Filter:
 def iter_entries(kind, flt):
     for p in log_files(kind):
         if flt.from_ts and p.stat().st_mtime < flt.from_ts:
-            continue   # el fichero se cerró antes del inicio del rango
+            continue   # the file was closed before the range starts
         with _open(p) as fh:
             for line in fh:
                 if not line.startswith("{") or not flt.raw_precheck(line):
@@ -224,7 +224,7 @@ def error_lines(name="error.log", q="", from_ts=None, to_ts=None, limit=500, lev
     return list(out)[::-1]
 
 
-# ---------------- analíticas ----------------
+# ---------------- analytics ----------------
 
 RANGES = {"1h": 3600, "6h": 6 * 3600, "24h": 86400, "7d": 7 * 86400, "30d": 30 * 86400}
 
@@ -310,7 +310,7 @@ def analytics(rng="24h", host="", from_s=None, to_s=None, hids=None):
     labels = []
     for i in range(nb):
         t = time.localtime(start + i * bsize)
-        labels.append(time.strftime("%d/%m %H:%M" if bsize < 86400 else "%d/%m", t))
+        labels.append(time.strftime("%m-%d %H:%M" if bsize < 86400 else "%m-%d", t))
     errors = sum(v for k, v in statuses.items() if k >= 500)
     hits = cache.get("HIT", 0)
     cache_total = sum(cache.values())

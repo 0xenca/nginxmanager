@@ -1,25 +1,25 @@
-// nginx-panel — JS sin dependencias (Chart.js y QRCode se cargan solo donde se usan)
+// nginx-panel — dependency-free JS (Chart.js and QRCode are loaded only where used)
 (function () {
   "use strict";
 
-  // menú móvil
+  // mobile menu
   document.querySelectorAll("[data-toggle]").forEach(function (b) {
     b.addEventListener("click", function () {
       document.getElementById(b.dataset.toggle).classList.toggle("open");
     });
   });
 
-  // confirmaciones
+  // confirmations
   document.querySelectorAll("form[data-confirm]").forEach(function (f) {
     f.addEventListener("submit", function (e) {
       if (!confirm(f.dataset.confirm)) e.preventDefault();
     });
   });
 
-  // grupos de hosts: plegar/desplegar (recordado en este navegador)
+  // host groups: collapse/expand (remembered in this browser)
   var store = {
     get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
-    set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) { /* sin almacenamiento */ } }
+    set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) { /* no storage */ } }
   };
   document.querySelectorAll(".group[data-group]").forEach(function (g) {
     var key = "np-group-collapsed-" + g.dataset.group;
@@ -36,14 +36,14 @@
     });
   });
 
-  // cerrar popovers al hacer clic fuera
+  // close popovers when clicking outside
   document.addEventListener("click", function (e) {
     document.querySelectorAll("details.pop[open]").forEach(function (d) {
       if (!d.contains(e.target)) d.removeAttribute("open");
     });
   });
 
-  // búsqueda de hosts
+  // host search
   var hf = document.getElementById("hostfilter");
   if (hf) {
     hf.addEventListener("input", function () {
@@ -58,14 +58,14 @@
         var rows = g.querySelectorAll(".hostrow");
         var vis = g.querySelectorAll(".hostrow:not([hidden])").length;
         g.hidden = q !== "" && (rows.length === 0 || vis === 0);
-        if (q && vis) g.classList.remove("collapsed");   // al buscar, abrir donde hay resultados
+        if (q && vis) g.classList.remove("collapsed");   // when searching, expand groups with results
       });
       var nm = document.getElementById("nomatch");
       if (nm) nm.hidden = any || !q;
     });
   }
 
-  // selección múltiple para mover hosts entre grupos
+  // multi-select to move hosts between groups
   var bulk = document.getElementById("bulk");
   if (bulk) {
     var sels = document.querySelectorAll("input.sel");
@@ -87,7 +87,7 @@
     });
   }
 
-  // comprobación manual de estado de hosts (sin recargar la página)
+  // manual host status check (without reloading the page)
   document.querySelectorAll("form[data-check]").forEach(function (f) {
     f.addEventListener("submit", function (e) {
       e.preventDefault();
@@ -99,7 +99,7 @@
         : document.querySelectorAll('.hscell[data-hid="' + scope.slice(5) + '"]');
       cells.forEach(function (c) { c.closest("tr").classList.add("checking"); });
       btn.classList.add("busy");
-      btn.textContent = "Comprobando…";
+      btn.textContent = "Checking…";
       var msg = document.getElementById("checkmsg");
       fetch(f.action, { method: "POST", body: new FormData(f), credentials: "same-origin",
                         headers: { "Accept": "application/json" } })
@@ -110,10 +110,10 @@
             if (cell) cell.innerHTML = d.html[hid];
           });
           var bad = Object.keys(d.levels).filter(function (k) { return d.levels[k] === "error"; }).length;
-          if (msg) msg.textContent = "· " + Object.keys(d.levels).length + " comprobados en " + d.elapsed + " s" +
-            (bad ? " · " + bad + " con errores" : "");
+          if (msg) msg.textContent = "· " + Object.keys(d.levels).length + " checked in " + d.elapsed + " s" +
+            (bad ? " · " + bad + " with errors" : "");
         })
-        .catch(function (err) { if (msg) msg.textContent = "· error al comprobar: " + err.message; })
+        .catch(function (err) { if (msg) msg.textContent = "· check failed: " + err.message; })
         .finally(function () {
           cells.forEach(function (c) { c.closest("tr").classList.remove("checking"); });
           btn.classList.remove("busy");
@@ -122,7 +122,7 @@
     });
   });
 
-  // campos condicionales: data-show-if='{"type":["proxy"]}'
+  // conditional fields: data-show-if='{"type":["proxy"]}'
   var form = document.querySelector("form.form");
   if (form) {
     var deps = form.querySelectorAll("[data-show-if]");
@@ -142,7 +142,7 @@
     update();
   }
 
-  // cert nuevo: mostrar bloque según tipo
+  // new cert: show the block for the selected type
   var kind = document.querySelector("select[name=kind]");
   if (kind) {
     var upd = function () {
@@ -154,7 +154,7 @@
     upd();
   }
 
-  // seguimiento de tareas
+  // job tracking
   var job = document.getElementById("joblog");
   if (job && job.dataset.status === "running") {
     var poll = function () {
@@ -163,7 +163,7 @@
         job.scrollTop = job.scrollHeight;
         var st = document.getElementById("jobstatus");
         if (d.status !== "running") {
-          st.textContent = d.status === "ok" ? "Completada" : "Con errores";
+          st.textContent = d.status === "ok" ? "Completed" : "Failed";
           st.className = "tag " + (d.status === "ok" ? "ok" : "err");
           document.getElementById("jobdone").hidden = false;
         } else {
@@ -174,13 +174,13 @@
     poll();
   }
 
-  // QR para 2FA
+  // QR for 2FA
   var qr = document.getElementById("qrcode");
   if (qr && window.QRCode) {
     new window.QRCode(qr, { text: qr.dataset.uri, width: 180, height: 180 });
   }
 
-  // gráficas de analíticas
+  // analytics charts
   var data = document.getElementById("chart-data");
   if (data && window.Chart) {
     var d = JSON.parse(data.textContent);
@@ -191,7 +191,7 @@
     Chart.defaults.borderColor = grid;
     Chart.defaults.font.family = css.getPropertyValue("--sans");
     var colors = { "2xx": "#159a5b", "3xx": "#2f6db3", "4xx": "#d29a2a", "5xx": "#c2412d", "blocked": "#7a4bb8" };
-    var names = { "2xx": "2xx", "3xx": "3xx", "4xx": "4xx", "5xx": "5xx", "blocked": "Bloqueadas (WAF)" };
+    var names = { "2xx": "2xx", "3xx": "3xx", "4xx": "4xx", "5xx": "5xx", "blocked": "Blocked (WAF)" };
     new Chart(document.getElementById("reqChart"), {
       type: "bar",
       data: {
@@ -210,7 +210,7 @@
     });
     new Chart(document.getElementById("bwChart"), {
       type: "line",
-      data: { labels: d.labels, datasets: [{ label: "MB servidos", data: d.bytes.map(function (b) { return +(b / 1048576).toFixed(2); }),
+      data: { labels: d.labels, datasets: [{ label: "MB served", data: d.bytes.map(function (b) { return +(b / 1048576).toFixed(2); }),
         borderColor: "#159a5b", backgroundColor: "rgba(21,154,91,.12)", fill: true, pointRadius: 0, tension: .25, borderWidth: 2 }] },
       options: { responsive: true, maintainAspectRatio: false, animation: false,
         interaction: { mode: "index", intersect: false },

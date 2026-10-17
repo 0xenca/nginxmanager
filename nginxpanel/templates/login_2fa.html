@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block bodyclass %}auth{% endblock %}
-{% block title %}Verificación{% endblock %}
+{% block title %}Verification{% endblock %}
 {% block content %}
 <form method="post" class="authcard">
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-  <div class="brand"><span>Verificación en dos pasos</span></div>
-  <p class="muted">Introduce el código de 6 dígitos de tu app de autenticación.</p>
-  <label for="c">Código</label><input type="text" id="c" name="code" inputmode="numeric" pattern="[0-9 ]{6,7}" autocomplete="one-time-code" autofocus required>
-  <button class="btn primary">Verificar</button>
+  <div class="brand"><span>Two-step verification</span></div>
+  <p class="muted">Enter the 6-digit code from your authenticator app.</p>
+  <label for="c">Code</label><input type="text" id="c" name="code" inputmode="numeric" pattern="[0-9 ]{6,7}" autocomplete="one-time-code" autofocus required>
+  <button class="btn primary">Verify</button>
 </form>
 {% endblock %}

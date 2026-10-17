@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}Tarea{% endblock %}
+{% block title %}Job{% endblock %}
 {% block content %}
 <div class="head"><div><h1>{{ j.title }}</h1>
-<p>Iniciada {{ j.started|dt('%d/%m/%Y %H:%M:%S') }} · <span id="jobstatus" class="tag {{ 'ok' if j.status == 'ok' else ('warn' if j.status == 'running' else 'err') }}">{{ {'running':'En curso…','ok':'Completada','error':'Con errores'}[j.status] }}</span></p></div>
-<div id="jobdone" {{ 'hidden' if j.status == 'running' }} class="actions"><a class="btn" href="{{ url_for('main.certs') }}">Certificados</a><a class="btn" href="{{ url_for('main.system') }}">Sistema</a></div></div>
+<p>Started {{ j.started|dt('%Y-%m-%d %H:%M:%S') }} · <span id="jobstatus" class="tag {{ 'ok' if j.status == 'ok' else ('warn' if j.status == 'running' else 'err') }}">{{ {'running':'Running…','ok':'Completed','error':'Failed'}[j.status] }}</span></p></div>
+<div id="jobdone" {{ 'hidden' if j.status == 'running' }} class="actions"><a class="btn" href="{{ url_for('main.certs') }}">Certificates</a><a class="btn" href="{{ url_for('main.system') }}">System</a></div></div>
 <pre class="code log" id="joblog" data-status="{{ j.status }}" data-url="{{ url_for('main.job', jid=j.id, format='json') }}">{{ j.log }}</pre>
 {% endblock %}

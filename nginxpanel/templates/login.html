@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 {% block bodyclass %}auth{% endblock %}
-{% block title %}Acceso{% endblock %}
+{% block title %}Sign in{% endblock %}
 {% block content %}
 <form method="post" class="authcard">
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
   <div class="brand"><svg viewBox="0 0 32 32" width="30" height="30"><path d="M16 2 29 9.5v13L16 30 3 22.5v-13z" fill="var(--accent)"/><path d="M11 21V11l10 10V11" stroke="#fff" stroke-width="2.6" fill="none"/></svg><span>nginx<b>panel</b></span></div>
-  {% if no_users %}<div class="flash warn"><pre>No hay usuarios. Crea el primero en el servidor:
+  {% if no_users %}<div class="flash warn"><pre>There are no users. Create the first one on the server:
 sudo nginx-panel create-admin admin</pre></div>{% endif %}
-  <label for="u">Usuario</label><input type="text" id="u" name="username" autofocus autocomplete="username" required>
-  <label for="p">Contraseña</label><input type="password" id="p" name="password" autocomplete="current-password" required>
-  <button class="btn primary">Entrar</button>
+  <label for="u">Username</label><input type="text" id="u" name="username" autofocus autocomplete="username" required>
+  <label for="p">Password</label><input type="password" id="p" name="password" autocomplete="current-password" required>
+  <button class="btn primary">Sign in</button>
 </form>
 {% endblock %}

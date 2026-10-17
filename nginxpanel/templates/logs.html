@@ -2,8 +2,8 @@
 {% block title %}Logs{% endblock %}
 {% block content %}
 <div class="head">
-  <div><h1>Logs {{ 'de acceso' if kind == 'access' else 'de streams' }}</h1>
-  <p>{{ "{:,}".format(res.total).replace(",", ".") }} entradas coinciden · {{ res.elapsed }} s{% if res.truncated %} · <span class="tag warn">búsqueda cortada por tiempo: acota el rango</span>{% endif %}</p></div>
+  <div><h1>{{ 'Access' if kind == 'access' else 'Stream' }} logs</h1>
+  <p>{{ "{:,}".format(res.total) }} matching entries · {{ res.elapsed }} s{% if res.truncated %} · <span class="tag warn">search stopped on time limit: narrow the range</span>{% endif %}</p></div>
   <div class="actions">
     <a class="btn {{ 'primary' if kind == 'access' }}" href="{{ url_for('main.logs_view', kind='access') }}">HTTP</a>
     <a class="btn {{ 'primary' if kind == 'stream' }}" href="{{ url_for('main.logs_view', kind='stream') }}">Streams</a>
@@ -11,26 +11,26 @@
 </div>
 <form class="card filters" method="get">
   <input type="hidden" name="kind" value="{{ kind }}">
-  <div><label>Desde</label><input type="datetime-local" name="from" value="{{ args.get('from', '') }}"></div>
-  <div><label>Hasta</label><input type="datetime-local" name="to" value="{{ args.get('to', '') }}"></div>
-  <div><label>IP o CIDR</label><input type="text" name="ip" value="{{ args.get('ip', '') }}" placeholder="1.2.3.4 / 10.0.0.0/8"></div>
+  <div><label>From</label><input type="datetime-local" name="from" value="{{ args.get('from', '') }}"></div>
+  <div><label>To</label><input type="datetime-local" name="to" value="{{ args.get('to', '') }}"></div>
+  <div><label>IP or CIDR</label><input type="text" name="ip" value="{{ args.get('ip', '') }}" placeholder="1.2.3.4 / 10.0.0.0/8"></div>
   {% if kind == 'access' %}
-  <div><label>Grupo</label><select name="group"><option value="">Todos</option>{% for gr in groups %}<option value="{{ gr.id }}" {{ 'selected' if args.get('group') == gr.id|string }}>{{ gr.name }}</option>{% endfor %}<option value="0" {{ 'selected' if args.get('group') == '0' }}>— sin grupo —</option></select></div>
+  <div><label>Group</label><select name="group"><option value="">All</option>{% for gr in groups %}<option value="{{ gr.id }}" {{ 'selected' if args.get('group') == gr.id|string }}>{{ gr.name }}</option>{% endfor %}<option value="0" {{ 'selected' if args.get('group') == '0' }}>— no group —</option></select></div>
   <div><label>Host</label><input type="text" name="host" value="{{ args.get('host', '') }}"></div>
-  <div><label>Estado</label><input type="text" name="status" value="{{ args.get('status', '') }}" placeholder="404, 5xx, >=400, !200"></div>
-  <div><label>Método</label><select name="method"><option value="">Todos</option>{% for m in ['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'] %}<option {{ 'selected' if args.get('method') == m }}>{{ m }}</option>{% endfor %}</select></div>
-  <div><label>Ruta contiene</label><input type="text" name="path" value="{{ args.get('path', '') }}"></div>
-  <div><label>User-Agent contiene</label><input type="text" name="ua" value="{{ args.get('ua', '') }}"></div>
-  <div><label class="switch" style="text-transform:none;letter-spacing:0"><input type="checkbox" name="waf" value="1" {{ 'checked' if args.get('waf') }}> Solo bloqueadas</label></div>
+  <div><label>Status</label><input type="text" name="status" value="{{ args.get('status', '') }}" placeholder="404, 5xx, >=400, !200"></div>
+  <div><label>Method</label><select name="method"><option value="">All</option>{% for m in ['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'] %}<option {{ 'selected' if args.get('method') == m }}>{{ m }}</option>{% endfor %}</select></div>
+  <div><label>Path contains</label><input type="text" name="path" value="{{ args.get('path', '') }}"></div>
+  <div><label>User-Agent contains</label><input type="text" name="ua" value="{{ args.get('ua', '') }}"></div>
+  <div><label class="switch" style="text-transform:none;letter-spacing:0"><input type="checkbox" name="waf" value="1" {{ 'checked' if args.get('waf') }}> Blocked only</label></div>
   {% else %}
-  <div><label>Puerto</label><input type="text" name="port" value="{{ args.get('port', '') }}"></div>
-  <div><label>Estado</label><input type="text" name="status" value="{{ args.get('status', '') }}" placeholder="200, 502…"></div>
+  <div><label>Port</label><input type="text" name="port" value="{{ args.get('port', '') }}"></div>
+  <div><label>Status</label><input type="text" name="status" value="{{ args.get('status', '') }}" placeholder="200, 502…"></div>
   {% endif %}
-  <div><label>Texto libre</label><input type="text" name="q" value="{{ args.get('q', '') }}"></div>
-  <div class="actions"><button class="btn primary">Filtrar</button><a class="btn" href="{{ url_for('main.logs_view', kind=kind) }}">Limpiar</a></div>
+  <div><label>Free text</label><input type="text" name="q" value="{{ args.get('q', '') }}"></div>
+  <div class="actions"><button class="btn primary">Filter</button><a class="btn" href="{{ url_for('main.logs_view', kind=kind) }}">Clear</a></div>
 </form>
 <div class="actions" style="margin-bottom:12px">
-  <span class="muted">Descargar resultado filtrado:</span>
+  <span class="muted">Download filtered results:</span>
   <a class="btn sm" href="{{ url_for('main.logs_export') }}?{{ qs }}{{ '&' if qs }}fmt=csv{{ '' if 'kind=' in qs else '&kind=' ~ kind }}">CSV</a>
   <a class="btn sm" href="{{ url_for('main.logs_export') }}?{{ qs }}{{ '&' if qs }}fmt=jsonl{{ '' if 'kind=' in qs else '&kind=' ~ kind }}">JSON Lines</a>
 </div>
@@ -38,10 +38,10 @@
 {% if res.rows %}
 <table class="dense">
   {% if kind == 'access' %}
-  <tr><th>Fecha</th><th>IP</th><th>Host</th><th>Petición</th><th class="num">Estado</th><th class="num">Bytes</th><th class="num">ms</th><th>Info</th></tr>
+  <tr><th>Date</th><th>IP</th><th>Host</th><th>Request</th><th class="num">Status</th><th class="num">Bytes</th><th class="num">ms</th><th>Info</th></tr>
   {% for e in res.rows %}
   <tr>
-    <td class="mono">{{ e._ts|dt('%d/%m %H:%M:%S') }}</td>
+    <td class="mono">{{ e._ts|dt('%m-%d %H:%M:%S') }}</td>
     <td class="mono"><a href="?kind=access&ip={{ e.ip }}">{{ e.ip }}</a></td>
     <td class="mono">{{ e.host }}</td>
     <td class="mono trunc" title="{{ e.method }} {{ e.uri }}&#10;{{ e.ua }}"><b>{{ e.method }}</b> {{ e.uri }}</td>
@@ -52,20 +52,20 @@
   </tr>
   {% endfor %}
   {% else %}
-  <tr><th>Fecha</th><th>IP</th><th>Proto</th><th class="num">Puerto</th><th class="num">Estado</th><th class="num">Enviado</th><th class="num">Recibido</th><th class="num">Duración</th><th>Destino</th></tr>
+  <tr><th>Date</th><th>IP</th><th>Proto</th><th class="num">Port</th><th class="num">Status</th><th class="num">Sent</th><th class="num">Received</th><th class="num">Duration</th><th>Target</th></tr>
   {% for e in res.rows %}
-  <tr><td class="mono">{{ e._ts|dt('%d/%m %H:%M:%S') }}</td><td class="mono">{{ e.ip }}</td><td>{{ e.proto }}</td><td class="num">{{ e.port }}</td>
+  <tr><td class="mono">{{ e._ts|dt('%m-%d %H:%M:%S') }}</td><td class="mono">{{ e.ip }}</td><td>{{ e.proto }}</td><td class="num">{{ e.port }}</td>
   <td class="num">{{ e.status }}</td><td class="num">{{ human_bytes(e.sent) }}</td><td class="num">{{ human_bytes(e.recv) }}</td><td class="num">{{ e.dur }} s</td><td class="mono">{{ e.upstream }}</td></tr>
   {% endfor %}
   {% endif %}
 </table>
-{% else %}<div class="empty">Sin resultados.</div>{% endif %}
+{% else %}<div class="empty">No results.</div>{% endif %}
 </div>
 {% if res.pages > 1 %}
 <div class="pager">
-  {% if page > 1 %}<a class="btn sm" href="?{{ qs }}{{ '&' if qs }}page={{ page - 1 }}">← Más recientes</a>{% endif %}
-  <span class="muted">Página {{ page }} de {{ res.pages }}</span>
-  {% if page < res.pages %}<a class="btn sm" href="?{{ qs }}{{ '&' if qs }}page={{ page + 1 }}">Más antiguas →</a>{% endif %}
+  {% if page > 1 %}<a class="btn sm" href="?{{ qs }}{{ '&' if qs }}page={{ page - 1 }}">← Newer</a>{% endif %}
+  <span class="muted">Page {{ page }} of {{ res.pages }}</span>
+  {% if page < res.pages %}<a class="btn sm" href="?{{ qs }}{{ '&' if qs }}page={{ page + 1 }}">Older →</a>{% endif %}
 </div>
 {% endif %}
 {% endblock %}

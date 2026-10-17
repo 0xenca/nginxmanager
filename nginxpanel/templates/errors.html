@@ -1,17 +1,17 @@
 {% extends "base.html" %}
-{% block title %}Logs de error{% endblock %}
+{% block title %}Error logs{% endblock %}
 {% block content %}
-<div class="head"><div><h1>Logs de error</h1><p>Más recientes primero.</p></div>
-  <a class="btn" href="{{ url_for('main.logs_download', name=name) }}">Descargar {{ name }}</a></div>
+<div class="head"><div><h1>Error logs</h1><p>Newest first.</p></div>
+  <a class="btn" href="{{ url_for('main.logs_download', name=name) }}">Download {{ name }}</a></div>
 <form class="card filters" method="get">
-  <div><label>Fichero</label><select name="file">{% for f in files %}<option {{ 'selected' if f == name }}>{{ f }}</option>{% endfor %}</select></div>
-  <div><label>Nivel</label><select name="level"><option value="">Todos</option>{% for l in ['emerg','alert','crit','error','warn','notice'] %}<option {{ 'selected' if args.get('level') == l }}>{{ l }}</option>{% endfor %}</select></div>
-  <div><label>Desde</label><input type="datetime-local" name="from" value="{{ args.get('from', '') }}"></div>
-  <div><label>Hasta</label><input type="datetime-local" name="to" value="{{ args.get('to', '') }}"></div>
-  <div><label>Contiene (IP, host, texto)</label><input type="text" name="q" value="{{ args.get('q', '') }}"></div>
-  <div><label>Máx. líneas</label><input type="number" name="limit" value="{{ args.get('limit', 500) }}"></div>
-  <div><button class="btn primary">Filtrar</button></div>
+  <div><label>File</label><select name="file">{% for f in files %}<option {{ 'selected' if f == name }}>{{ f }}</option>{% endfor %}</select></div>
+  <div><label>Level</label><select name="level"><option value="">All</option>{% for l in ['emerg','alert','crit','error','warn','notice'] %}<option {{ 'selected' if args.get('level') == l }}>{{ l }}</option>{% endfor %}</select></div>
+  <div><label>From</label><input type="datetime-local" name="from" value="{{ args.get('from', '') }}"></div>
+  <div><label>To</label><input type="datetime-local" name="to" value="{{ args.get('to', '') }}"></div>
+  <div><label>Contains (IP, host, text)</label><input type="text" name="q" value="{{ args.get('q', '') }}"></div>
+  <div><label>Max lines</label><input type="number" name="limit" value="{{ args.get('limit', 500) }}"></div>
+  <div><button class="btn primary">Filter</button></div>
 </form>
 <pre class="code log">{% for l in lines %}{{ l }}
-{% else %}(sin entradas){% endfor %}</pre>
+{% else %}(no entries){% endfor %}</pre>
 {% endblock %}

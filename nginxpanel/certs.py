@@ -1,4 +1,4 @@
-"""Certificados: Let's Encrypt (webroot), subidos (PEM) y autofirmados."""
+"""Certificates: Let's Encrypt (webroot), uploaded (PEM) and self-signed."""
 import calendar
 import os
 import re
@@ -55,13 +55,13 @@ def _pubkey(args):
 
 
 def store_custom(cid, cert_pem, key_pem, chain_pem=""):
-    """Valida que el certificado y la clave casan y los guarda. Devuelve (ok, msg)."""
+    """Checks that the certificate and key match and stores them. Returns (ok, msg)."""
     cert_pem = cert_pem.strip() + "\n"
     key_pem = key_pem.strip() + "\n"
     if "BEGIN CERTIFICATE" not in cert_pem or "PRIVATE KEY" not in key_pem:
-        return False, "Formato PEM no reconocido"
+        return False, "Unrecognized PEM format"
     if "ENCRYPTED" in key_pem:
-        return False, "La clave privada está cifrada con contraseña; quítasela antes (openssl pkey -in k.pem -out k2.pem)"
+        return False, "The private key is password-protected; remove the passphrase first (openssl pkey -in k.pem -out k2.pem)"
     with tempfile.TemporaryDirectory() as td:
         c, k = Path(td) / "c.pem", Path(td) / "k.pem"
         c.write_text(cert_pem)
@@ -69,9 +69,9 @@ def store_custom(cid, cert_pem, key_pem, chain_pem=""):
         pc = _pubkey(["x509", "-in", str(c), "-noout", "-pubkey"])
         pk = _pubkey(["pkey", "-in", str(k), "-pubout"])
         if not pc or not pk:
-            return False, "No se pudo leer el certificado o la clave"
+            return False, "Could not read the certificate or the key"
         if pc.strip() != pk.strip():
-            return False, "La clave privada no corresponde al certificado"
+            return False, "The private key does not match the certificate"
     d = cert_dir(cid)
     d.mkdir(parents=True, exist_ok=True)
     os.chmod(d, 0o700)
@@ -79,7 +79,7 @@ def store_custom(cid, cert_pem, key_pem, chain_pem=""):
     (d / "fullchain.pem").write_text(full)
     (d / "privkey.pem").write_text(key_pem)
     os.chmod(d / "privkey.pem", 0o600)
-    return True, "Certificado guardado"
+    return True, "Certificate saved"
 
 
 def make_selfsigned(cid, domains, days=825):

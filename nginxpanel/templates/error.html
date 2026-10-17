@@ -1,5 +1,5 @@
 {% extends "base.html" %}
 {% block title %}Error {{ code }}{% endblock %}
 {% block content %}
-<div class="card empty"><h1 style="font-size:40px">{{ code }}</h1><p>{{ msg }}</p><a class="btn" href="{{ url_for('main.dashboard') }}">Volver al inicio</a></div>
+<div class="card empty"><h1 style="font-size:40px">{{ code }}</h1><p>{{ msg }}</p><a class="btn" href="{{ url_for('main.dashboard') }}">Back to home</a></div>
 {% endblock %}

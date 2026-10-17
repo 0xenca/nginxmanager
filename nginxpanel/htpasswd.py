@@ -1,4 +1,4 @@
-"""Hash {SSHA} compatible con auth_basic de nginx (sin dependencia de crypt)."""
+"""{SSHA} hash compatible with nginx auth_basic (no dependency on crypt)."""
 import base64
 import hashlib
 import os

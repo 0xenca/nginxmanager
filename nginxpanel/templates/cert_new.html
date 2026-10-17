@@ -1,26 +1,26 @@
 {% extends "base.html" %}
-{% block title %}Nuevo certificado{% endblock %}
+{% block title %}New certificate{% endblock %}
 {% block content %}
-<div class="head"><div><h1>Nuevo certificado</h1></div></div>
+<div class="head"><div><h1>New certificate</h1></div></div>
 <form method="post" enctype="multipart/form-data" class="form card">
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-  <div class="field"><label>Tipo</label><div>
+  <div class="field"><label>Type</label><div>
     <select name="kind">
-      <option value="letsencrypt" {{ 'selected' if form.get('kind') == 'letsencrypt' }}>Let's Encrypt (gratuito, automático)</option>
-      <option value="custom" {{ 'selected' if form.get('kind') == 'custom' }}>Subir certificado propio (PEM)</option>
-      <option value="selfsigned" {{ 'selected' if form.get('kind') == 'selfsigned' }}>Autofirmado (pruebas / red interna)</option>
+      <option value="letsencrypt" {{ 'selected' if form.get('kind') == 'letsencrypt' }}>Let's Encrypt (free, automatic)</option>
+      <option value="custom" {{ 'selected' if form.get('kind') == 'custom' }}>Upload a custom certificate (PEM)</option>
+      <option value="selfsigned" {{ 'selected' if form.get('kind') == 'selfsigned' }}>Self-signed (testing / internal network)</option>
     </select></div></div>
-  <div class="field"><label>Nombre</label><div><input type="text" name="name" value="{{ form.get('name', '') }}" required></div></div>
-  <div class="field" data-kind="letsencrypt selfsigned"><label>Dominios</label><div>
+  <div class="field"><label>Name</label><div><input type="text" name="name" value="{{ form.get('name', '') }}" required></div></div>
+  <div class="field" data-kind="letsencrypt selfsigned"><label>Domains</label><div>
     <textarea name="domains" rows="3" class="mono" spellcheck="false">{{ form.get('domains', '') }}</textarea>
-    <div class="help" data-kind="letsencrypt">Uno por línea. Los dominios deben apuntar a este servidor y el puerto 80 debe ser accesible desde Internet (validación HTTP-01).
-      Email: <b>{{ settings.le_email or 'sin configurar' }}</b>{% if settings.le_staging %} · <span class="tag warn">STAGING</span>{% endif %} (cámbialo en Seguridad).</div>
+    <div class="help" data-kind="letsencrypt">One per line. The domains must point to this server and port 80 must be reachable from the Internet (HTTP-01 validation).
+      Email: <b>{{ settings.le_email or 'not set' }}</b>{% if settings.le_staging %} · <span class="tag warn">STAGING</span>{% endif %} (change it under Security).</div>
   </div></div>
   <div data-kind="custom">
-    <div class="field"><label>Certificado (PEM)</label><div><input type="file" name="cert_file" accept=".pem,.crt,.cer"><div class="help">o pégalo:</div><textarea name="cert_pem" rows="4" class="mono">{{ form.get('cert_pem', '') }}</textarea></div></div>
-    <div class="field"><label>Clave privada (PEM)</label><div><input type="file" name="key_file" accept=".pem,.key"><div class="help">o pégala:</div><textarea name="key_pem" rows="4" class="mono"></textarea></div></div>
-    <div class="field"><label>Cadena intermedia (opcional)</label><div><textarea name="chain_pem" rows="3" class="mono">{{ form.get('chain_pem', '') }}</textarea><div class="help">Si tu certificado no incluye ya la cadena (fullchain).</div></div></div>
+    <div class="field"><label>Certificate (PEM)</label><div><input type="file" name="cert_file" accept=".pem,.crt,.cer"><div class="help">or paste it:</div><textarea name="cert_pem" rows="4" class="mono">{{ form.get('cert_pem', '') }}</textarea></div></div>
+    <div class="field"><label>Private key (PEM)</label><div><input type="file" name="key_file" accept=".pem,.key"><div class="help">or paste it:</div><textarea name="key_pem" rows="4" class="mono"></textarea></div></div>
+    <div class="field"><label>Intermediate chain (optional)</label><div><textarea name="chain_pem" rows="3" class="mono">{{ form.get('chain_pem', '') }}</textarea><div class="help">If your certificate does not already include the chain (fullchain).</div></div></div>
   </div>
-  <div class="formbar"><button class="btn primary">Crear</button><a class="btn" href="{{ url_for('main.certs') }}">Cancelar</a></div>
+  <div class="formbar"><button class="btn primary">Create</button><a class="btn" href="{{ url_for('main.certs') }}">Cancel</a></div>
 </form>
 {% endblock %}

@@ -1,4 +1,4 @@
-"""SQLite: tablas de usuarios/auditoría + entidades genéricas (JSON)."""
+"""SQLite: user/audit tables + generic entities (JSON)."""
 import json
 import sqlite3
 import threading
@@ -82,7 +82,7 @@ def close_db(_exc=None):
         db.close()
 
 
-# ---------- entidades genéricas ----------
+# ---------- generic entities ----------
 
 def _row_to_entity(row):
     d = json.loads(row["data"])
@@ -128,7 +128,7 @@ def delete_entity(table, eid, db=None):
     db.commit()
 
 
-# ---------- estado de hosts (última comprobación manual) ----------
+# ---------- host status (last manual check) ----------
 
 def get_statuses(db=None):
     db = db or get_db()
@@ -149,7 +149,7 @@ def delete_status(hid, db=None):
     db.commit()
 
 
-# ---------- ajustes ----------
+# ---------- settings ----------
 
 DEFAULT_SETTINGS = {
     "ipv6": True,
@@ -191,7 +191,7 @@ def set_settings(values, db=None):
     db.commit()
 
 
-# ---------- auditoría ----------
+# ---------- audit ----------
 
 def audit(username, ip, action, detail="", db=None):
     db = db or get_db()

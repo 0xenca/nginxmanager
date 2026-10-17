@@ -1,52 +1,52 @@
 {% extends "base.html" %}
-{% block title %}Analíticas{% endblock %}
+{% block title %}Analytics{% endblock %}
 {% block content %}
 <div class="head">
   {% set gsel = groups|selectattr('id', 'equalto', (args.group|int if args.group and args.group != '0' else -1))|first %}
-  <div><h1>Analíticas{% if gsel %} · {{ gsel.name }}{% elif args.group == '0' %} · sin grupo{% endif %}{% if args.host %} · <span class="mono">{{ args.host }}</span>{% endif %}</h1>
-  <p>{{ a.from|dt }} → {{ a.to|dt }}{% if a.truncated %} · <span class="tag warn">análisis parcial (demasiado volumen)</span>{% endif %}</p></div>
+  <div><h1>Analytics{% if gsel %} · {{ gsel.name }}{% elif args.group == '0' %} · no group{% endif %}{% if args.host %} · <span class="mono">{{ args.host }}</span>{% endif %}</h1>
+  <p>{{ a.from|dt }} → {{ a.to|dt }}{% if a.truncated %} · <span class="tag warn">partial analysis (too much volume)</span>{% endif %}</p></div>
 </div>
 <form class="card filters" method="get">
-  <div><label>Periodo</label><select name="range">{% for k, lbl in [('1h','1 hora'),('6h','6 horas'),('24h','24 horas'),('7d','7 días'),('30d','30 días')] %}<option value="{{ k }}" {{ 'selected' if (args.range or '24h') == k }}>{{ lbl }}</option>{% endfor %}</select></div>
-  <div><label>Desde (opcional)</label><input type="datetime-local" name="from" value="{{ args.from or '' }}"></div>
-  <div><label>Hasta</label><input type="datetime-local" name="to" value="{{ args.to or '' }}"></div>
-  <div><label>Grupo</label><select name="group"><option value="">Todos</option>{% for gr in groups %}<option value="{{ gr.id }}" {{ 'selected' if args.group == gr.id|string }}>{{ gr.name }}</option>{% endfor %}<option value="0" {{ 'selected' if args.group == '0' }}>— sin grupo —</option></select></div>
-  <div><label>Host</label><select name="host"><option value="">Todos</option>{% for h in hosts %}<option {{ 'selected' if args.host == h }}>{{ h }}</option>{% endfor %}</select></div>
-  <div><button class="btn primary">Ver</button></div>
+  <div><label>Period</label><select name="range">{% for k, lbl in [('1h','1 hour'),('6h','6 hours'),('24h','24 hours'),('7d','7 days'),('30d','30 days')] %}<option value="{{ k }}" {{ 'selected' if (args.range or '24h') == k }}>{{ lbl }}</option>{% endfor %}</select></div>
+  <div><label>From (optional)</label><input type="datetime-local" name="from" value="{{ args.from or '' }}"></div>
+  <div><label>To</label><input type="datetime-local" name="to" value="{{ args.to or '' }}"></div>
+  <div><label>Group</label><select name="group"><option value="">All</option>{% for gr in groups %}<option value="{{ gr.id }}" {{ 'selected' if args.group == gr.id|string }}>{{ gr.name }}</option>{% endfor %}<option value="0" {{ 'selected' if args.group == '0' }}>— no group —</option></select></div>
+  <div><label>Host</label><select name="host"><option value="">All</option>{% for h in hosts %}<option {{ 'selected' if args.host == h }}>{{ h }}</option>{% endfor %}</select></div>
+  <div><button class="btn primary">Show</button></div>
 </form>
 
 <div class="grid g4" style="margin-bottom:18px">
-  <div class="stat"><div class="k">Peticiones</div><div class="v">{{ "{:,}".format(a.total).replace(",", ".") }}</div><div class="s">{{ a.unique_ips }} IPs únicas</div></div>
-  <div class="stat"><div class="k">Tráfico servido</div><div class="v">{{ human_bytes(a.bytes) }}</div></div>
-  <div class="stat"><div class="k">Tiempo de respuesta</div><div class="v">{{ a.avg_ms }} ms</div><div class="s">p95 {{ a.p95_ms }} ms</div></div>
-  <div class="stat"><div class="k">Errores 5xx</div><div class="v {{ 's5' if a.error_rate > 1 }}">{{ a.error_rate }}%</div></div>
-  <div class="stat"><div class="k">Bloqueadas</div><div class="v">{{ a.blocked }}</div><div class="s">WAF + lista negra</div></div>
-  <div class="stat"><div class="k">Acierto de caché</div><div class="v">{{ a.cache_hit ~ '%' if a.cache_hit is not none else '—' }}</div></div>
+  <div class="stat"><div class="k">Requests</div><div class="v">{{ "{:,}".format(a.total) }}</div><div class="s">{{ a.unique_ips }} unique IPs</div></div>
+  <div class="stat"><div class="k">Traffic served</div><div class="v">{{ human_bytes(a.bytes) }}</div></div>
+  <div class="stat"><div class="k">Response time</div><div class="v">{{ a.avg_ms }} ms</div><div class="s">p95 {{ a.p95_ms }} ms</div></div>
+  <div class="stat"><div class="k">5xx errors</div><div class="v {{ 's5' if a.error_rate > 1 }}">{{ a.error_rate }}%</div></div>
+  <div class="stat"><div class="k">Blocked</div><div class="v">{{ a.blocked }}</div><div class="s">WAF + blocklist</div></div>
+  <div class="stat"><div class="k">Cache hit ratio</div><div class="v">{{ a.cache_hit ~ '%' if a.cache_hit is not none else '—' }}</div></div>
 </div>
 
-<div class="card"><h2>Peticiones por estado</h2><div class="chartbox"><canvas id="reqChart"></canvas></div></div>
-<div class="card"><h2>Ancho de banda</h2><div class="chartbox" style="height:200px"><canvas id="bwChart"></canvas></div></div>
+<div class="card"><h2>Requests by status</h2><div class="chartbox"><canvas id="reqChart"></canvas></div></div>
+<div class="card"><h2>Bandwidth</h2><div class="chartbox" style="height:200px"><canvas id="bwChart"></canvas></div></div>
 
 {% macro bars(items, link=None, block=False) %}
   {% if items %}{% set mx = items[0][1] %}
   <div class="bars">{% for k, n in items %}
     <div class="bar" style="--w:{{ (n / mx * 100)|round }}%">
-      <span class="lbl" title="{{ k }}">{% if link %}<a href="{{ url_for('main.logs_view', **{link: k}) }}">{{ k or '(vacío)' }}</a>{% else %}{{ k or '(vacío)' }}{% endif %}</span>
+      <span class="lbl" title="{{ k }}">{% if link %}<a href="{{ url_for('main.logs_view', **{link: k}) }}">{{ k or '(empty)' }}</a>{% else %}{{ k or '(empty)' }}{% endif %}</span>
       <span class="n">{{ n }}{% if block and can('security', 2) %}
-        <form method="post" class="inline" action="{{ url_for('main.block_ip') }}" data-confirm="¿Bloquear {{ k }} en todos los hosts?"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="ip" value="{{ k }}"><button class="link" title="Bloquear">⛔</button></form>{% endif %}</span>
+        <form method="post" class="inline" action="{{ url_for('main.block_ip') }}" data-confirm="Block {{ k }} on all hosts?"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="ip" value="{{ k }}"><button class="link" title="Block">⛔</button></form>{% endif %}</span>
     </div>{% endfor %}</div>
-  {% else %}<div class="muted">Sin datos</div>{% endif %}
+  {% else %}<div class="muted">No data</div>{% endif %}
 {% endmacro %}
 
 <div class="grid g2">
   <div class="card"><h2>Top IPs</h2>{{ bars(a.top_ips, 'ip', True) }}</div>
-  <div class="card"><h2>Top rutas</h2>{{ bars(a.top_paths, 'path') }}</div>
+  <div class="card"><h2>Top paths</h2>{{ bars(a.top_paths, 'path') }}</div>
   <div class="card"><h2>Hosts</h2>{{ bars(a.top_hosts, 'host') }}</div>
-  <div class="card"><h2>Códigos de estado</h2>{{ bars(a.top_status, 'status') }}</div>
-  <div class="card"><h2>Ataques bloqueados</h2>{{ bars(a.waf) }}</div>
-  <div class="card"><h2>Rutas con errores 5xx</h2>{{ bars(a.err_paths) }}</div>
+  <div class="card"><h2>Status codes</h2>{{ bars(a.top_status, 'status') }}</div>
+  <div class="card"><h2>Blocked attacks</h2>{{ bars(a.waf) }}</div>
+  <div class="card"><h2>Paths with 5xx errors</h2>{{ bars(a.err_paths) }}</div>
   <div class="card"><h2>User-Agents</h2>{{ bars(a.top_ua, 'ua') }}</div>
-  <div class="card"><h2>Métodos · Caché</h2>{{ bars(a.methods, 'method') }}<h3>Caché</h3>{{ bars(a.cache) }}</div>
+  <div class="card"><h2>Methods · Cache</h2>{{ bars(a.methods, 'method') }}<h3>Cache</h3>{{ bars(a.cache) }}</div>
 </div>
 <script type="application/json" id="chart-data">{{ chart_json|safe }}</script>
 {% endblock %}

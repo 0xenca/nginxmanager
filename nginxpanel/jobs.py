@@ -1,4 +1,4 @@
-"""Tareas en segundo plano (instalar nginx, pedir certificados) con log en disco."""
+"""Background jobs (installing nginx, requesting certificates) logged to disk."""
 import json
 import subprocess
 import threading
@@ -20,7 +20,7 @@ def _write_state(jid, **state):
 
 
 def start(title, commands, on_done=None, env=None):
-    """commands: lista de cadenas shell o de listas argv. on_done(ok, log_text)."""
+    """commands: list of shell strings or argv lists. on_done(ok, log_text)."""
     config.JOBS_DIR.mkdir(parents=True, exist_ok=True)
     jid = time.strftime("%Y%m%d%H%M%S") + "-" + uuid.uuid4().hex[:6]
     _write_state(jid, id=jid, title=title, status="running", started=time.time())
@@ -34,7 +34,7 @@ def start(title, commands, on_done=None, env=None):
                 log.write(f"$ {shown}\n")
                 log.flush()
                 if config.DRY_RUN:
-                    log.write("(DRY_RUN: omitido)\n")
+                    log.write("(DRY_RUN: skipped)\n")
                     continue
                 try:
                     p = subprocess.Popen(cmd, shell=isinstance(cmd, str), stdout=log,
@@ -43,7 +43,7 @@ def start(title, commands, on_done=None, env=None):
                 except Exception as e:  # noqa: BLE001
                     log.write(f"ERROR: {e}\n")
                     rc = 1
-                log.write(f"[código de salida {rc}]\n\n")
+                log.write(f"[exit code {rc}]\n\n")
                 log.flush()
                 if rc != 0:
                     ok = False
@@ -54,7 +54,7 @@ def start(title, commands, on_done=None, env=None):
             try:
                 extra = on_done(ok, text) or ""
             except Exception as e:  # noqa: BLE001
-                ok, extra = False, f"Error post-tarea: {e}"
+                ok, extra = False, f"Post-job error: {e}"
         if extra:
             with open(lp, "a") as log:
                 log.write(extra + "\n")

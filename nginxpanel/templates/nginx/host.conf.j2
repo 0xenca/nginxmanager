@@ -139,7 +139,7 @@ server {
     limit_conn panel_conn {{ h.conn_limit }};
 {% endif %}
 {% if acl %}
-    # Lista de acceso: {{ acl.name }}
+    # Access list: {{ acl.name }}
 {% for c in acl.deny %}
     deny {{ c }};
 {% endfor %}
@@ -151,7 +151,7 @@ server {
 {% endif %}
 {% if acl.auth_users %}
     satisfy {{ acl.satisfy }};
-    auth_basic "Acceso restringido";
+    auth_basic "Restricted access";
     auth_basic_user_file {{ managed }}/htpasswd/access_{{ acl.id }};
 {% endif %}
 {% endif %}
@@ -167,7 +167,7 @@ server {
     location / {
 {{ proxy("all" if h.cache_mode == "all" else "off") }}
 {% if h.custom_location %}
-        # --- personalizado ---
+        # --- custom ---
         {{ h.custom_location | indent(8) }}
 {% endif %}
     }
@@ -179,7 +179,7 @@ server {
 {% endif %}
 {% if h.custom_server %}
 
-    # --- personalizado ---
+    # --- custom ---
     {{ h.custom_server | indent(4) }}
 {% endif %}
 }

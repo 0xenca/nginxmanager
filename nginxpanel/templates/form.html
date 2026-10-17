@@ -3,10 +3,10 @@
 {% block content %}
 <div class="head">
   <div>
-    <h1>{% if settings_mode %}Seguridad y ajustes globales{% elif eid %}Editar {{ meta.title }}{% else %}Nuevo {{ meta.title }}{% endif %}</h1>
-    {% if settings_mode %}<p>Se aplican a todo nginx. Al guardar se valida con <code>nginx -t</code> y, si falla, no se aplica nada.</p>{% endif %}
+    <h1>{% if settings_mode %}Security and global settings{% elif eid %}Edit {{ meta.title }}{% else %}New {{ meta.title }}{% endif %}</h1>
+    {% if settings_mode %}<p>They apply to all of nginx. Saving validates with <code>nginx -t</code> and, if it fails, nothing is applied.</p>{% endif %}
   </div>
-  {% if eid and table == 'hosts' %}<a class="btn" href="{{ url_for('main.host_config', eid=eid) }}">Ver config generada</a>{% endif %}
+  {% if eid and table == 'hosts' %}<a class="btn" href="{{ url_for('main.host_config', eid=eid) }}">View generated config</a>{% endif %}
 </div>
 <form method="post" class="form card" autocomplete="off">
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
@@ -37,8 +37,8 @@
   {% endfor %}
   {% if not settings_mode or can('security', 2) %}
   <div class="formbar">
-    <button class="btn primary">Guardar y aplicar</button>
-    {% if not settings_mode %}<a class="btn" href="{{ url_for(meta.list) }}">Cancelar</a>{% endif %}
+    <button class="btn primary">Save and apply</button>
+    {% if not settings_mode %}<a class="btn" href="{{ url_for(meta.list) }}">Cancel</a>{% endif %}
   </div>
   {% endif %}
 </form>

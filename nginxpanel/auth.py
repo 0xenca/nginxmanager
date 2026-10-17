@@ -1,4 +1,4 @@
-"""Autenticación, permisos por área, CSRF, TOTP y limitación de intentos."""
+"""Authentication, per-area permissions, CSRF, TOTP and login throttling."""
 import base64
 import functools
 import hashlib
@@ -13,19 +13,19 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from .db import audit, get_db
 
-# área -> descripción. Niveles: 0 sin acceso, 1 ver, 2 gestionar
+# area -> description. Levels: 0 no access, 1 view, 2 manage
 AREAS = {
-    "hosts": "Hosts y redirecciones",
+    "hosts": "Hosts and redirects",
     "backends": "Backends (upstreams)",
-    "streams": "Streams TCP/UDP",
-    "certs": "Certificados SSL",
-    "access": "Listas de acceso",
-    "security": "Seguridad / ajustes globales",
-    "logs": "Logs y analíticas",
-    "system": "Sistema (instalar, recargar, backups)",
-    "users": "Usuarios y auditoría",
+    "streams": "TCP/UDP streams",
+    "certs": "SSL certificates",
+    "access": "Access lists",
+    "security": "Security / global settings",
+    "logs": "Logs and analytics",
+    "system": "System (install, reload, backups)",
+    "users": "Users and audit",
 }
-LEVELS = {0: "Sin acceso", 1: "Ver", 2: "Gestionar"}
+LEVELS = {0: "No access", 1: "View", 2: "Manage"}
 
 MAX_FAILS = 5
 FAIL_WINDOW = 15 * 60
@@ -69,7 +69,7 @@ def log(action, detail=""):
     audit(u["username"] if u else None, client_ip(), action, detail)
 
 
-# ---------- decoradores ----------
+# ---------- decorators ----------
 
 def login_required(fn):
     @functools.wraps(fn)
@@ -114,10 +114,10 @@ def check_csrf():
     if request.method in ("POST", "PUT", "DELETE", "PATCH"):
         sent = request.form.get("_csrf") or request.headers.get("X-CSRF-Token", "")
         if not sent or not hmac.compare_digest(sent, session.get("_csrf", "")):
-            abort(400, "Token CSRF inválido. Recarga la página.")
+            abort(400, "Invalid CSRF token. Reload the page.")
 
 
-# ---------- bloqueo por intentos fallidos ----------
+# ---------- lockout after failed attempts ----------
 
 def is_locked(ip):
     db = get_db()
@@ -131,7 +131,7 @@ def register_fail(ip, username):
     db = get_db()
     db.execute("INSERT INTO login_attempts(ip, ts, username) VALUES (?,?,?)", (ip, time.time(), username))
     db.commit()
-    audit(username, ip, "login_fallido")
+    audit(username, ip, "login_failed")
 
 
 def clear_fails(ip):
@@ -144,7 +144,7 @@ def authenticate(username, password):
     row = get_db().execute("SELECT * FROM users WHERE username=? AND active=1", (username,)).fetchone()
     if row and check_password_hash(row["password_hash"], password):
         return dict(row)
-    # coste similar si el usuario no existe (evita enumeración por tiempo)
+    # similar cost if the user does not exist (prevents timing-based enumeration)
     check_password_hash(_DUMMY, password or "x")
     return None
 
@@ -152,7 +152,7 @@ def authenticate(username, password):
 _DUMMY = generate_password_hash("dummy-password-for-timing")
 
 
-# ---------- TOTP (RFC 6238) sin dependencias ----------
+# ---------- TOTP (RFC 6238) without dependencies ----------
 
 def totp_new_secret():
     return base64.b32encode(secrets.token_bytes(20)).decode().rstrip("=")

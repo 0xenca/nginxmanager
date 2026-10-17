@@ -1,30 +1,30 @@
 {% extends "base.html" %}
-{% block title %}Certificados{% endblock %}
+{% block title %}Certificates{% endblock %}
 {% block content %}
 <div class="head">
-  <div><h1>Certificados SSL</h1><p>Let's Encrypt se renueva solo (timer de certbot) y recarga nginx tras cada renovación.</p></div>
-  {% if can('certs', 2) %}<a class="btn primary" href="{{ url_for('main.cert_new') }}">+ Nuevo certificado</a>{% endif %}
+  <div><h1>SSL certificates</h1><p>Let's Encrypt renews automatically (certbot timer) and reloads nginx after each renewal.</p></div>
+  {% if can('certs', 2) %}<a class="btn primary" href="{{ url_for('main.cert_new') }}">+ New certificate</a>{% endif %}
 </div>
-{% if not certbot %}<div class="flash warn"><pre>certbot no está instalado: solo puedes subir certificados o generar autofirmados.</pre></div>{% endif %}
+{% if not certbot %}<div class="flash warn"><pre>certbot is not installed: you can only upload certificates or generate self-signed ones.</pre></div>{% endif %}
 <div class="card table-wrap">
 {% if items %}
 <table>
-  <tr><th>Nombre</th><th>Tipo</th><th>Dominios</th><th>Caduca</th><th>Estado</th><th>En uso</th><th></th></tr>
+  <tr><th>Name</th><th>Type</th><th>Domains</th><th>Expires</th><th>Status</th><th>In use</th><th></th></tr>
   {% for c in items %}
   <tr>
     <td><b>{{ c.name }}</b>{% if c.issuer %}<div class="muted" style="font-size:12px">{{ c.issuer[:60] }}</div>{% endif %}</td>
-    <td>{{ {'letsencrypt':"Let's Encrypt",'custom':'Propio','selfsigned':'Autofirmado'}[c.kind] }}</td>
+    <td>{{ {'letsencrypt':"Let's Encrypt",'custom':'Custom','selfsigned':'Self-signed'}[c.kind] }}</td>
     <td class="mono">{{ c.domains|join('<br>'|safe) }}</td>
-    <td>{% if c.days is not none %}{{ c.expires|dt('%d/%m/%Y') }}<br><span class="tag {{ 'err' if c.days < 7 else ('warn' if c.days < 21 else 'ok') }}">{{ c.days }} días</span>{% else %}—{% endif %}</td>
-    <td>{% if c.status == 'ok' %}<span class="tag ok">válido</span>{% elif c.status == 'pending' %}<span class="tag warn">pendiente</span>{% if c.job %} <a href="{{ url_for('main.job', jid=c.job) }}">ver tarea</a>{% endif %}{% else %}<span class="tag err">error</span>{% if c.job %} <a href="{{ url_for('main.job', jid=c.job) }}">ver log</a>{% endif %}{% endif %}</td>
+    <td>{% if c.days is not none %}{{ c.expires|dt('%Y-%m-%d') }}<br><span class="tag {{ 'err' if c.days < 7 else ('warn' if c.days < 21 else 'ok') }}">{{ c.days }} days</span>{% else %}—{% endif %}</td>
+    <td>{% if c.status == 'ok' %}<span class="tag ok">valid</span>{% elif c.status == 'pending' %}<span class="tag warn">pending</span>{% if c.job %} <a href="{{ url_for('main.job', jid=c.job) }}">view job</a>{% endif %}{% else %}<span class="tag err">error</span>{% if c.job %} <a href="{{ url_for('main.job', jid=c.job) }}">view log</a>{% endif %}{% endif %}</td>
     <td>{{ c.used|join('<br>'|safe) or '—' }}</td>
     <td class="num" style="white-space:nowrap">{% if can('certs', 2) %}
-      {% if c.kind != 'custom' %}<form method="post" class="inline" action="{{ url_for('main.cert_renew', eid=c.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn sm">{{ 'Reintentar' if c.status != 'ok' else 'Renovar' }}</button></form>{% endif %}
-      <form method="post" class="inline" action="{{ url_for('main.cert_delete', eid=c.id) }}" data-confirm="¿Borrar certificado?"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn sm danger">Borrar</button></form>
+      {% if c.kind != 'custom' %}<form method="post" class="inline" action="{{ url_for('main.cert_renew', eid=c.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn sm">{{ 'Retry' if c.status != 'ok' else 'Renew' }}</button></form>{% endif %}
+      <form method="post" class="inline" action="{{ url_for('main.cert_delete', eid=c.id) }}" data-confirm="Delete this certificate?"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn sm danger">Delete</button></form>
     {% endif %}</td>
   </tr>
   {% endfor %}
 </table>
-{% else %}<div class="empty">Aún no hay certificados.</div>{% endif %}
+{% else %}<div class="empty">No certificates yet.</div>{% endif %}
 </div>
 {% endblock %}

@@ -43,7 +43,7 @@ main.withside { margin-left: 228px; }
 .head p { margin: 4px 0 0; color: var(--muted); }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
-/* ---------- componentes ---------- */
+/* ---------- components ---------- */
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; margin-bottom: 18px; }
 .grid { display: grid; gap: 14px; }
 .g4 { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
@@ -95,7 +95,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .flash.error { border-color: var(--err); background: var(--err-soft); }
 .flash.error pre { font-family: var(--mono); font-size: 12.5px; }
 
-/* ---------- formularios ---------- */
+/* ---------- forms ---------- */
 .form { max-width: 780px; }
 .fsec { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 26px 0 10px;
   padding-bottom: 6px; border-bottom: 1px solid var(--line); }
@@ -154,7 +154,7 @@ body.auth main { padding: 0; width: 100%; max-width: 380px; }
   .g2 { grid-template-columns: 1fr; }
 }
 
-/* ---------- grupos de hosts ---------- */
+/* ---------- host groups ---------- */
 .group { padding: 0; overflow: visible; }
 .ghead { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .group.collapsed .ghead { border-bottom: 0; }
@@ -186,7 +186,7 @@ body.auth main { padding: 0; width: 100%; max-width: 380px; }
 .bulkbar select { width: auto; min-width: 180px; padding: 4px 8px; }
 .bulkbar .btn:not(.primary) { background: transparent; color: #fff; border-color: #3a4640; }
 
-/* ---------- estado de hosts ---------- */
+/* ---------- host status ---------- */
 .hscell { min-width: 170px; max-width: 260px; }
 .hs { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; cursor: pointer; list-style: none; }
 .hs::-webkit-details-marker { display: none; }

@@ -1,51 +1,52 @@
 # nginx-panel
 
-Panel web en Python (Flask) para instalar y administrar nginx en un servidor Linux:
-hosts, backends con balanceo, SSL, WebSocket, streams TCP/UDP, WAF básico, caché,
-usuarios con permisos, analíticas y visor de logs.
+A Python (Flask) web panel to install and manage nginx on a Linux server: hosts,
+load-balanced backends, SSL, WebSocket, TCP/UDP streams, a basic WAF, caching, users with
+permissions, analytics and a log viewer.
 
-Probado contra nginx 1.26 real: 115 comprobaciones de extremo a extremo (formularios →
-config generada → `nginx -t` → tráfico real con curl).
+Tested against a real nginx 1.26: 115 end-to-end checks (forms → generated config →
+`nginx -t` → real traffic with curl).
 
-## Instalación
+## Installation
 
 ```bash
-unzip nginx-panel.zip && cd nginx-panel
-sudo ./install.sh                                  # panel en todas las interfaces, puerto 8181
-sudo ./install.sh --with-nginx                     # además instala nginx + módulo stream + certbot
-sudo ./install.sh --allow 192.168.88.0/24,10.8.0.0/24   # solo esas redes pueden usar el panel
-sudo ./install.sh --bind 127.0.0.1                 # solo local (acceso por túnel SSH)
+git clone https://github.com/0xenca/nginxmanager.git && cd nginxmanager
+sudo ./install.sh                                  # panel on all interfaces, port 8181
+sudo ./install.sh --with-nginx                     # also installs nginx + stream module + certbot
+sudo ./install.sh --allow 192.168.88.0/24,10.8.0.0/24   # only these networks can use the panel
+sudo ./install.sh --bind 127.0.0.1                 # local only (access through an SSH tunnel)
 ```
 
-El instalador crea `/opt/nginx-panel` (venv), el servicio `nginx-panel` (gunicorn),
-`/etc/nginx-panel.env`, la rotación de logs y un usuario `admin` con contraseña aleatoria
-que imprime al final.
+The installer creates `/opt/nginx-panel` (venv), the `nginx-panel` service (gunicorn),
+`/etc/nginx-panel.env`, log rotation and an `admin` user with a random password that it
+prints at the end.
 
-Acceso: `http://IP-del-servidor:8181`. Las redes permitidas se cambian luego en
+Access: `http://SERVER-IP:8181`. The allowed networks can be changed later in
 `/etc/nginx-panel.env` (`NP_ALLOWED_NETS`) + `systemctl restart nginx-panel`.
 
-Primer uso: **Sistema → Instalar nginx** (si no lo está) → **Tomar el control de nginx**.
+First use: **System → Install nginx** (if it is not installed) → **Take control of nginx**.
 
-## Instalación manual (sin `install.sh`)
+## Manual installation (without `install.sh`)
 
-Mismos pasos que hace el instalador, para quien prefiera revisarlos o adaptarlos. Todo
-como root (`sudo -i`), desde la carpeta del proyecto (descomprimida o clonada con
-`git clone https://github.com/0xenca/nginxmanager.git && cd nginxmanager`).
+The same steps the installer performs, for anyone who prefers to review or adapt them. Run
+everything as root (`sudo -i`) from the project folder (cloned with
+`git clone https://github.com/0xenca/nginxmanager.git && cd nginxmanager`, or extracted
+from a release archive).
 
-**1. Dependencias del sistema**
+**1. System dependencies**
 
 ```bash
 # Debian / Ubuntu
 apt-get update
 apt-get install -y python3 python3-venv openssl logrotate
-apt-get install -y nginx libnginx-mod-stream certbot     # opcional: nginx + stream + certbot
+apt-get install -y nginx libnginx-mod-stream certbot     # optional: nginx + stream + certbot
 
 # RHEL / Rocky / Alma
 dnf install -y python3 openssl logrotate
-dnf install -y epel-release && dnf install -y nginx nginx-mod-stream certbot   # opcional
+dnf install -y epel-release && dnf install -y nginx nginx-mod-stream certbot   # optional
 ```
 
-**2. Código y entorno virtual**
+**2. Code and virtual environment**
 
 ```bash
 mkdir -p /opt/nginx-panel
@@ -54,11 +55,11 @@ python3 -m venv /opt/nginx-panel/venv
 /opt/nginx-panel/venv/bin/pip install --upgrade pip
 /opt/nginx-panel/venv/bin/pip install -r /opt/nginx-panel/requirements.txt
 
-install -d -m 700 /var/lib/nginx-panel        # base de datos
-install -d -m 750 /var/log/nginx/panel        # logs de los hosts
+install -d -m 700 /var/lib/nginx-panel        # database
+install -d -m 750 /var/log/nginx/panel        # host logs
 ```
 
-**3. Comando `nginx-panel`**
+**3. The `nginx-panel` command**
 
 ```bash
 cat > /usr/local/bin/nginx-panel <<'EOF'
@@ -69,28 +70,28 @@ EOF
 chmod 755 /usr/local/bin/nginx-panel
 ```
 
-**4. Configuración** — `/etc/nginx-panel.env` (ajusta IP, puerto y redes):
+**4. Configuration**: `/etc/nginx-panel.env` (adjust the IP, port and networks):
 
 ```bash
 cat > /etc/nginx-panel.env <<'EOF'
-# Configuración de nginx-panel (se lee al arrancar el servicio)
+# nginx-panel configuration (read when the service starts)
 NP_BIND=0.0.0.0
 NP_PANEL_PORT=8181
 NP_BEHIND_PROXY=0
-# Redes que pueden usar el panel (CIDR separados por comas). Vacío = cualquiera.
+# Networks allowed to use the panel (comma-separated CIDRs). Empty = any.
 NP_ALLOWED_NETS=
-# Pon 1 si accedes al panel por HTTPS (cookies Secure)
+# Set to 1 if you access the panel over HTTPS (Secure cookies)
 NP_SECURE_COOKIES=0
 EOF
 chmod 600 /etc/nginx-panel.env
 ```
 
-**5. Servicio systemd**
+**5. systemd service**
 
 ```bash
 cat > /etc/systemd/system/nginx-panel.service <<'EOF'
 [Unit]
-Description=nginx-panel (administración web de nginx)
+Description=nginx-panel (web administration for nginx)
 After=network-online.target
 Wants=network-online.target
 
@@ -100,7 +101,7 @@ WorkingDirectory=/opt/nginx-panel
 ExecStart=/opt/nginx-panel/venv/bin/gunicorn --workers 1 --threads 8 --timeout 120 \
   --no-control-socket --bind ${NP_BIND}:${NP_PANEL_PORT} --access-logfile - nginxpanel.wsgi:app
 Restart=on-failure
-# Necesita root: escribe en /etc/nginx, recarga nginx, ejecuta certbot y apt.
+# Needs root: writes to /etc/nginx, reloads nginx, runs certbot and apt.
 User=root
 PrivateTmp=true
 ProtectHome=true
@@ -111,7 +112,7 @@ WantedBy=multi-user.target
 EOF
 ```
 
-**6. Rotación de logs** (en RHEL/Rocky cambia `adm` por `root`):
+**6. Log rotation** (on RHEL/Rocky replace `adm` with `root`):
 
 ```bash
 cat > /etc/logrotate.d/nginx-panel <<'EOF'
@@ -131,98 +132,98 @@ cat > /etc/logrotate.d/nginx-panel <<'EOF'
 EOF
 ```
 
-**7. Arrancar y crear el administrador**
+**7. Start it and create the administrator**
 
 ```bash
 systemctl daemon-reload
 systemctl enable --now nginx-panel
-nginx-panel create-admin admin --random      # imprime la contraseña generada
+nginx-panel create-admin admin --random      # prints the generated password
 systemctl status nginx-panel
 ```
 
-Entra en `http://IP-del-servidor:8181`, cambia la contraseña, activa 2FA y sigue con
-**Sistema → Tomar el control de nginx**.
+Open `http://SERVER-IP:8181`, change the password, enable 2FA and continue with
+**System → Take control of nginx**.
 
-## Qué hace
+## Features
 
-| Área | Detalle |
+| Area | Details |
 |---|---|
-| Hosts | Proxy inverso o redirección. Varios dominios y comodines. Destino directo o backend. |
-| Grupos | Carpetas para organizar hosts (Internos, Públicos, Clientes…), con color. Lista agrupada y plegable (el estado se recuerda), buscador, selección múltiple para mover hosts entre grupos, «+ Host» directo en un grupo, activar/desactivar un grupo entero en un solo cambio de config, y filtro por grupo en analíticas, logs y exportaciones. Borrar un grupo nunca borra sus hosts. |
-| Estado de hosts | Diagnóstico bajo demanda (botón ⟳: todos, por grupo o por host; nunca automático). Por capas: DNS (¿resuelve? ¿apunta aquí?), nginx en local (código, latencia, TLS), vía DNS como lo haría un cliente (detecta NAT loopback, firewall o que responda otra máquina), backend directo (cada servidor del balanceo), certificado (confiable, nombre, caducidad) y redirección HTTP→HTTPS. Resumen en una línea y detalle desplegable; el último resultado queda guardado. |
-| Interfaz de escucha | Cada host y cada stream elige por qué IP del servidor se publica (desplegable con las IPs detectadas) o «Todas las interfaces» (por defecto). El panel añade un `default_server` por cada IP concreta y hace que los hosts en «todas» escuchen también en ella, para que ni se cuelen dominios ajenos ni desaparezcan hosts. |
-| Dominios desconocidos | `default_server` devuelve 444 (cierra sin responder) y en HTTPS rechaza el handshake TLS si el SNI no coincide (`ssl_reject_handshake`). Ni la IP ni un dominio ajeno muestran nada. |
-| Backends | Upstreams con round robin, least_conn, ip_hash o hash consistente; pesos, backup, down, max_fails, keepalive. |
-| SSL | Let's Encrypt (HTTP-01 por webroot, renovación automática con recarga), subida de PEM con verificación clave↔certificado, autofirmados. Forzar HTTPS, HTTP/2, HSTS. |
-| WebSocket | Upgrade/Connection y timeouts de 1 h por host. |
-| Streams | TCP, UDP o ambos, varios destinos con balanceo y ACL por IP. |
-| Protección | WAF básico (escáneres, sondeos `.env`/`.git`/phpMyAdmin, SQLi, XSS, traversal, Log4Shell, métodos TRACE), lista negra global, rate limit y límite de conexiones por IP, cabeceras de seguridad, `server_tokens off`, timeouts anti-slowloris. |
-| Listas de acceso | Allow/deny por IP/CIDR + autenticación básica, combinables (`satisfy all/any`). |
-| Caché | Por host: solo estáticos, o todo (respeta Cache-Control y nunca cachea peticiones con `Authorization` o cookie de sesión). Cabecera `X-Cache-Status`. |
-| Analíticas | Peticiones por estado en el tiempo, ancho de banda, p95, % de 5xx, acierto de caché, top IPs/rutas/hosts/UA, ataques bloqueados. Bloqueo de IP con un clic. |
-| Logs | Logs JSON. Filtros por fecha, IP o CIDR, host, estado (`404`, `5xx`, `>=400`, `!200`), método, ruta, UA, solo bloqueadas. Exportación CSV/JSONL del filtrado, descarga de ficheros (incluidos rotados `.gz`), visor de error.log. |
-| Usuarios | Permisos por área (sin acceso / ver / gestionar), administradores, 2FA TOTP, bloqueo tras 5 fallos, auditoría de cada acción. |
-| Sistema | Instalación de nginx, `nginx -t`, recarga, reinicio, copia antes de cada cambio y restauración. |
+| Hosts | Reverse proxy or redirect. Multiple domains and wildcards. Direct target or backend. |
+| Groups | Folders to organize hosts (Internal, Public, Customers…), with a color. Grouped, collapsible list (state is remembered), search, multi-select to move hosts between groups, "+ Host" straight into a group, enable/disable a whole group in a single config change, and group filter in analytics, logs and exports. Deleting a group never deletes its hosts. |
+| Host status | On-demand diagnostics (⟳ button: all, per group or per host; never automatic). Layered: DNS (does it resolve? does it point here?), local nginx (code, latency, TLS), via DNS the way a client would reach it (detects NAT loopback, firewall, or another machine answering), direct backend (each load-balanced server), certificate (trusted, name, expiry) and HTTP→HTTPS redirect. One-line summary with expandable details; the last result is stored. |
+| Listen interface | Each host and stream chooses which server IP it is published on (dropdown with the detected IPs) or "All interfaces" (default). The panel adds a `default_server` for each specific IP and makes hosts on "all" listen on it too, so foreign domains neither slip through nor do hosts disappear. |
+| Unknown domains | `default_server` returns 444 (closes without responding) and on HTTPS rejects the TLS handshake if the SNI does not match (`ssl_reject_handshake`). Neither the bare IP nor a foreign domain shows anything. |
+| Backends | Upstreams with round robin, least_conn, ip_hash or consistent hash; weights, backup, down, max_fails, keepalive. |
+| SSL | Let's Encrypt (HTTP-01 via webroot, automatic renewal with reload), PEM upload with key↔certificate verification, self-signed. Force HTTPS, HTTP/2, HSTS. |
+| WebSocket | Upgrade/Connection and 1 h timeouts per host. |
+| Streams | TCP, UDP or both, multiple targets with load balancing and IP ACLs. |
+| Protection | Basic WAF (scanners, `.env`/`.git`/phpMyAdmin probes, SQLi, XSS, traversal, Log4Shell, TRACE methods), global blocklist, per-IP rate and connection limits, security headers, `server_tokens off`, anti-slowloris timeouts. |
+| Access lists | Allow/deny by IP/CIDR + basic authentication, combinable (`satisfy all/any`). |
+| Cache | Per host: static files only, or everything (honors Cache-Control and never caches requests with `Authorization` or a session cookie). `X-Cache-Status` header. |
+| Analytics | Requests by status over time, bandwidth, p95, % of 5xx, cache hit ratio, top IPs/paths/hosts/UAs, blocked attacks. One-click IP blocking. |
+| Logs | JSON logs. Filters by date, IP or CIDR, host, status (`404`, `5xx`, `>=400`, `!200`), method, path, UA, blocked only. CSV/JSONL export of the filtered results, file download (including rotated `.gz`), error.log viewer. |
+| Users | Per-area permissions (no access / view / manage), administrators, TOTP 2FA, lockout after 5 failures, audit log of every action. |
+| System | nginx installation, `nginx -t`, reload, restart, backup before every change and restore. |
 
-## Cómo aplica cambios
+## How changes are applied
 
-Cada cambio regenera **toda** la configuración desde la BD en `/etc/nginx/panel/`, guarda
-copia de lo anterior, ejecuta `nginx -t` y solo entonces recarga. Si `nginx -t` falla:
-restaura los ficheros, deshace el cambio en la BD y muestra el error. Nunca queda un nginx roto.
+Every change regenerates the **whole** configuration from the DB into `/etc/nginx/panel/`,
+backs up the previous one, runs `nginx -t` and only then reloads. If `nginx -t` fails, it
+restores the files, reverts the change in the DB and shows the error. nginx is never left broken.
 
-El panel reescribe `/etc/nginx/nginx.conf` (el original queda en `nginx.conf.panel-orig`) y,
-por defecto, **deja de cargar `sites-enabled/` y `conf.d/`**. Si tienes sitios previos,
-migra o actívalos en Seguridad → Avanzado (choca si alguno declara `default_server`).
+The panel rewrites `/etc/nginx/nginx.conf` (the original is kept as `nginx.conf.panel-orig`)
+and, by default, **stops loading `sites-enabled/` and `conf.d/`**. If you have existing sites,
+migrate them or enable them under Security → Advanced (it clashes if any of them declares `default_server`).
 
-## Seguridad del propio panel
+## Securing the panel itself
 
-El panel corre como **root** (escribe en `/etc/nginx`, ejecuta certbot y apt). Trátalo como un SSH:
+The panel runs as **root** (it writes to `/etc/nginx`, runs certbot and apt). Treat it like SSH:
 
-- Por defecto escucha en todas las interfaces (0.0.0.0:8181). Limita quién entra con
-  `NP_ALLOWED_NETS` (el panel responde 403 al resto) y/o con el firewall.
-- Para usarlo por HTTPS, publícalo como un host del propio panel con certificado y lista de
-  acceso; pon `NP_BEHIND_PROXY=1` y `NP_SECURE_COOKIES=1` en `/etc/nginx-panel.env`, reinicia,
-  y cierra el 8181 en el firewall.
-- Activa 2FA en Mi cuenta.
-- Las directivas personalizadas (texto libre que llega a nginx) solo las ven los administradores.
-  Todo lo demás pasa por validadores que impiden inyectar directivas.
-- Sesiones: cookie HttpOnly + SameSite=Strict, CSRF en todos los POST, CSP estricta.
+- By default it listens on all interfaces (0.0.0.0:8181). Restrict who can reach it with
+  `NP_ALLOWED_NETS` (the panel answers 403 to everyone else) and/or with the firewall.
+- To use it over HTTPS, publish it as a host in the panel itself with a certificate and an
+  access list; set `NP_BEHIND_PROXY=1` and `NP_SECURE_COOKIES=1` in `/etc/nginx-panel.env`,
+  restart, and close port 8181 in the firewall.
+- Enable 2FA under My account.
+- Custom directives (free text that reaches nginx) are only visible to administrators.
+  Everything else goes through validators that prevent directive injection.
+- Sessions: HttpOnly + SameSite=Strict cookie, CSRF on every POST, strict CSP.
 
-## Comandos
+## Commands
 
 ```bash
-nginx-panel create-admin USUARIO [--random]   # crear o recuperar un admin (resetea su 2FA)
-nginx-panel apply                             # regenerar config desde la BD
+nginx-panel create-admin USERNAME [--random]  # create or recover an admin (resets their 2FA)
+nginx-panel apply                             # regenerate the config from the DB
 systemctl status nginx-panel
 journalctl -u nginx-panel -f
 ```
 
-## Límites conocidos
+## Known limitations
 
-- **El estado se comprueba desde el propio servidor.** «Accesible» significa que nginx y el
-  backend responden desde dentro; la prueba «Vía DNS» se acerca a lo que ve un cliente, pero
-  no sustituye a una comprobación desde fuera de tu red (NAT loopback, CGNAT, firewall del ISP).
+- **Status is checked from the server itself.** "Reachable" means nginx and the backend
+  respond from the inside; the "Via DNS" check gets closer to what a client sees, but it is
+  no substitute for a check from outside your network (NAT loopback, CGNAT, ISP firewall).
+- **Basic WAF, not ModSecurity/Coraza.** It stops scanners and automated exploitation with few
+  false positives; it does not replace a WAF with OWASP CRS rules.
+- **Wildcards `*.domain`** need DNS-01: upload them as a custom certificate.
+- **Analytics** parse the logs on every query. This works fine up to several hundred MB per
+  range; with more volume the query is cut short and says so.
+- No GeoIP in this version.
+- Tested on Ubuntu 24.04 with nginx 1.26. Debian (nginx 1.22, `listen … http2` syntax) and
+  RHEL/Rocky (dnf + EPEL) are supported, but not tested.
 
-- **WAF básico, no ModSecurity/Coraza.** Corta escáneres y explotación automatizada con pocos
-  falsos positivos; no sustituye a un WAF con reglas OWASP CRS.
-- **Comodines `*.dominio`** necesitan DNS-01: súbelos como certificado propio.
-- **Analíticas**: parsea los logs en cada consulta. Va bien hasta varios cientos de MB por
-  rango; con más volumen la consulta se corta y lo indica.
-- Sin GeoIP en esta versión.
-- Probado en Ubuntu 24.04 con nginx 1.26. Contempla Debian (nginx 1.22, sintaxis `listen … http2`)
-  y RHEL/Rocky (dnf + EPEL), pero no se ha probado en ellos.
-
-## Estructura
+## Structure
 
 ```
 nginxpanel/
-  __init__.py   factoría Flask, cabeceras de seguridad
-  views.py      rutas
-  nginx.py      detección de entorno, generación, aplicación con rollback
-  forms.py      formularios declarativos + validadores anti-inyección
-  certs.py      Let's Encrypt / PEM / autofirmados
-  logs.py       filtrado, exportación y analíticas
-  auth.py       sesiones, permisos, CSRF, TOTP, bloqueo
-  jobs.py       tareas en segundo plano (apt, certbot)
-  templates/nginx/*.j2   plantillas de configuración nginx
+  __init__.py   Flask factory, security headers
+  views.py      routes
+  nginx.py      environment detection, generation, apply with rollback
+  forms.py      declarative forms + anti-injection validators
+  certs.py      Let's Encrypt / PEM / self-signed
+  checks.py     on-demand host reachability diagnostics
+  logs.py       filtering, export and analytics
+  auth.py       sessions, permissions, CSRF, TOTP, lockout
+  jobs.py       background jobs (apt, certbot)
+  templates/nginx/*.j2   nginx configuration templates
 ```
