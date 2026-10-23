@@ -91,6 +91,22 @@ NoNewPrivileges=false
 WantedBy=multi-user.target
 UNIT
 
+# Si un backend usa nombres DNS que aún no resuelven al arrancar, nginx falla.
+# systemd lo reintenta cada minuto, sin límite, hasta que arranca. (El panel también lo
+# instala al aplicar la configuración; systemd lo ignora si nginx no está instalado.)
+mkdir -p /etc/systemd/system/nginx.service.d
+cat > /etc/systemd/system/nginx.service.d/nginx-panel-restart.conf <<DROPIN
+# Generado por nginx-panel: reintenta arrancar nginx cada minuto si falla (DNS de backends)
+[Unit]
+After=network-online.target nss-lookup.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Restart=on-failure
+RestartSec=60
+DROPIN
+
 echo "==> logrotate"
 cat > /etc/logrotate.d/nginx-panel <<ROT
 /var/log/nginx/panel/*.log {
