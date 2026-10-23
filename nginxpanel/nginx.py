@@ -344,6 +344,35 @@ def has_systemd():
     return Path("/run/systemd/system").exists() and shutil.which("systemctl") is not None
 
 
+# Si un backend usa nombres DNS y aún no resuelven (p. ej. justo al arrancar el servidor),
+# nginx no arranca. Con esto systemd lo reintenta cada minuto, sin límite, hasta que lo logra.
+SYSTEMD_DROPIN = Path("/etc/systemd/system/nginx.service.d/nginx-panel-restart.conf")
+SYSTEMD_DROPIN_TEXT = """# Generado por nginx-panel: reintenta arrancar nginx cada minuto si falla (DNS de backends)
+[Unit]
+After=network-online.target nss-lookup.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Restart=on-failure
+RestartSec=60
+"""
+
+
+def ensure_systemd_restart():
+    """Instala el drop-in de reintento de nginx si falta o ha cambiado."""
+    if config.DRY_RUN or not has_systemd():
+        return
+    try:
+        if SYSTEMD_DROPIN.exists() and SYSTEMD_DROPIN.read_text() == SYSTEMD_DROPIN_TEXT:
+            return
+        SYSTEMD_DROPIN.parent.mkdir(parents=True, exist_ok=True)
+        SYSTEMD_DROPIN.write_text(SYSTEMD_DROPIN_TEXT)
+    except OSError:
+        return
+    run(["systemctl", "daemon-reload"])
+
+
 def reload_nginx():
     if config.DRY_RUN:
         return True, "DRY_RUN: recarga omitida"
@@ -377,6 +406,7 @@ def apply(db=None, label="auto"):
     env = detect_env()
     with apply_lock():
         ensure_dirs(env)
+        ensure_systemd_restart()
         orig = config.NGINX_DIR / "nginx.conf.panel-orig"
         if config.NGINX_CONF.exists() and not orig.exists():
             shutil.copy2(config.NGINX_CONF, orig)

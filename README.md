@@ -53,6 +53,11 @@ Cada cambio regenera **toda** la configuración desde la BD en `/etc/nginx/panel
 copia de lo anterior, ejecuta `nginx -t` y solo entonces recarga. Si `nginx -t` falla:
 restaura los ficheros, deshace el cambio en la BD y muestra el error. Nunca queda un nginx roto.
 
+Arranque con backends por nombre DNS: si al encender el servidor el DNS aún no resuelve,
+nginx no arranca. El panel instala `/etc/systemd/system/nginx.service.d/nginx-panel-restart.conf`
+(`Restart=on-failure`, `RestartSec=60`, sin límite de intentos), así que systemd lo reintenta
+cada minuto hasta que resuelve y se queda en marcha.
+
 El panel reescribe `/etc/nginx/nginx.conf` (el original queda en `nginx.conf.panel-orig`) y,
 por defecto, **deja de cargar `sites-enabled/` y `conf.d/`**. Si tienes sitios previos,
 migra o actívalos en Seguridad → Avanzado (choca si alguno declara `default_server`).
