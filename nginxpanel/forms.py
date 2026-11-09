@@ -196,7 +196,7 @@ def v_snippet(raw):
 
 def v_auth_users(raw, existing):
     """'usuario:contraseña' por línea. 'usuario:' sin contraseña conserva la actual."""
-    from .htpasswd import ssha
+    from .htpasswd import HashError, hash_password
     prev = {u["user"]: u["hash"] for u in existing or []}
     out = []
     for line in (raw or "").splitlines():
@@ -210,7 +210,10 @@ def v_auth_users(raw, existing):
         if pw:
             if len(pw) < 8:
                 raise V(f"La contraseña de {user} debe tener 8+ caracteres")
-            out.append({"user": user, "hash": ssha(pw)})
+            try:
+                out.append({"user": user, "hash": hash_password(pw)})
+            except HashError as e:
+                raise V(str(e))
         elif user in prev:
             out.append({"user": user, "hash": prev[user]})
         else:

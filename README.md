@@ -1,121 +1,213 @@
-# nginx-panel
+<div align="center">
 
-Panel web en Python (Flask) para instalar y administrar nginx en un servidor Linux:
-hosts, backends con balanceo, SSL, WebSocket, streams TCP/UDP, WAF básico, caché,
-usuarios con permisos, analíticas y visor de logs.
+# 🚀 nginx-panel
 
-Probado contra nginx 1.26 real: 115 comprobaciones de extremo a extremo (formularios →
-config generada → `nginx -t` → tráfico real con curl).
+### Todo el poder de nginx desde el navegador. Sin Docker. Sin ficheros a mano. Sin miedo.
 
-## Instalación
+**Proxy inverso · Balanceo de carga · SSL automático · WAF · Caché · Streams TCP/UDP · Analíticas · 2FA**
+
+<br>
+
+![Debian 13](https://img.shields.io/badge/Debian-13_trixie-A81D33?style=for-the-badge&logo=debian&logoColor=white)
+![nginx](https://img.shields.io/badge/nginx-1.26-009639?style=for-the-badge&logo=nginx&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.13-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Gratis](https://img.shields.io/badge/precio-0_€-success?style=for-the-badge)
+![Sin Docker](https://img.shields.io/badge/Docker-no_hace_falta-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+
+<br>
 
 ```bash
-unzip nginx-panel.zip && cd nginx-panel
-sudo ./install.sh                                  # panel en todas las interfaces, puerto 8181
-sudo ./install.sh --with-nginx                     # además instala nginx + módulo stream + certbot
-sudo ./install.sh --allow 192.168.88.0/24,10.8.0.0/24   # solo esas redes pueden usar el panel
-sudo ./install.sh --bind 127.0.0.1                 # solo local (acceso por túnel SSH)
+git clone https://github.com/0xenca/nginxmanager && cd nginxmanager && sudo ./install.sh
 ```
 
-El instalador crea `/opt/nginx-panel` (venv), el servicio `nginx-panel` (gunicorn),
-`/etc/nginx-panel.env`, la rotación de logs y un usuario `admin` con contraseña aleatoria
-que imprime al final.
+**Un comando. Un minuto. Un panel que nunca te deja nginx roto.**
 
-Acceso: `http://IP-del-servidor:8181`. Las redes permitidas se cambian luego en
-`/etc/nginx-panel.env` (`NP_ALLOWED_NETS`) + `systemctl restart nginx-panel`.
+</div>
 
-Primer uso: **Sistema → Instalar nginx** (si no lo está) → **Tomar el control de nginx**.
+---
 
-## Qué hace
+## ✨ Por qué nginx-panel
 
-| Área | Detalle |
-|---|---|
-| Hosts | Proxy inverso o redirección. Varios dominios y comodines. Destino directo o backend. |
-| Grupos | Carpetas para organizar hosts (Internos, Públicos, Clientes…), con color. Lista agrupada y plegable (el estado se recuerda), buscador, selección múltiple para mover hosts entre grupos, «+ Host» directo en un grupo, activar/desactivar un grupo entero en un solo cambio de config, y filtro por grupo en analíticas, logs y exportaciones. Borrar un grupo nunca borra sus hosts. |
-| Estado de hosts | Diagnóstico bajo demanda (botón ⟳: todos, por grupo o por host; nunca automático). Por capas: DNS (¿resuelve? ¿apunta aquí?), nginx en local (código, latencia, TLS), vía DNS como lo haría un cliente (detecta NAT loopback, firewall o que responda otra máquina), backend directo (cada servidor del balanceo), certificado (confiable, nombre, caducidad) y redirección HTTP→HTTPS. Resumen en una línea y detalle desplegable; el último resultado queda guardado. |
-| Interfaz de escucha | Cada host y cada stream elige por qué IP del servidor se publica (desplegable con las IPs detectadas) o «Todas las interfaces» (por defecto). El panel añade un `default_server` por cada IP concreta y hace que los hosts en «todas» escuchen también en ella, para que ni se cuelen dominios ajenos ni desaparezcan hosts. |
-| Dominios desconocidos | `default_server` devuelve 444 (cierra sin responder) y en HTTPS rechaza el handshake TLS si el SNI no coincide (`ssl_reject_handshake`). Ni la IP ni un dominio ajeno muestran nada. |
-| Backends | Upstreams con round robin, least_conn, ip_hash o hash consistente; pesos, backup, down, max_fails, keepalive. |
-| SSL | Let's Encrypt (HTTP-01 por webroot, renovación automática con recarga), subida de PEM con verificación clave↔certificado, autofirmados. Forzar HTTPS, HTTP/2, HSTS. |
-| WebSocket | Upgrade/Connection y timeouts de 1 h por host. |
-| Streams | TCP, UDP o ambos, varios destinos con balanceo y ACL por IP. |
-| Protección | WAF básico (escáneres, sondeos `.env`/`.git`/phpMyAdmin, SQLi, XSS, traversal, Log4Shell, métodos TRACE), lista negra global, rate limit y límite de conexiones por IP, cabeceras de seguridad, `server_tokens off`, timeouts anti-slowloris. |
-| Listas de acceso | Allow/deny por IP/CIDR + autenticación básica, combinables (`satisfy all/any`). |
-| Caché | Por host: solo estáticos, o todo (respeta Cache-Control y nunca cachea peticiones con `Authorization` o cookie de sesión). Cabecera `X-Cache-Status`. |
-| Analíticas | Peticiones por estado en el tiempo, ancho de banda, p95, % de 5xx, acierto de caché, top IPs/rutas/hosts/UA, ataques bloqueados. Bloqueo de IP con un clic. |
-| Logs | Logs JSON. Filtros por fecha, IP o CIDR, host, estado (`404`, `5xx`, `>=400`, `!200`), método, ruta, UA, solo bloqueadas. Exportación CSV/JSONL del filtrado, descarga de ficheros (incluidos rotados `.gz`), visor de error.log. |
-| Usuarios | Permisos por área (sin acceso / ver / gestionar), administradores, 2FA TOTP, bloqueo tras 5 fallos, auditoría de cada acción. |
-| Sistema | Instalación de nginx, `nginx -t`, recarga, reinicio, copia antes de cada cambio y restauración. |
+<table>
+<tr>
+<td width="50%" valign="top">
 
-## Cómo aplica cambios
+### 🛡️ Imposible romper nginx
+Cada cambio regenera la configuración completa, guarda una copia, pasa `nginx -t` y **solo entonces** recarga. ¿Falla? Restaura los ficheros y deshace el cambio en la base de datos. Tu nginx sigue sirviendo como si nada.
 
-Cada cambio regenera **toda** la configuración desde la BD en `/etc/nginx/panel/`, guarda
-copia de lo anterior, ejecuta `nginx -t` y solo entonces recarga. Si `nginx -t` falla:
-restaura los ficheros, deshace el cambio en la BD y muestra el error. Nunca queda un nginx roto.
+</td>
+<td width="50%" valign="top">
 
-Arranque con backends por nombre DNS: si al encender el servidor el DNS aún no resuelve,
-nginx no arranca. El panel instala `/etc/systemd/system/nginx.service.d/nginx-panel-restart.conf`
-(`Restart=on-failure`, `RestartSec=60`, sin límite de intentos), así que systemd lo reintenta
-cada minuto hasta que resuelve y se queda en marcha.
+### ⚡ nginx nativo, cero capas
+Nada de contenedores ni proxies dentro de proxies: el panel escribe configuración nginx limpia y legible en `/etc/nginx/panel/`. El rendimiento es el de nginx, porque **es** nginx.
 
-El panel reescribe `/etc/nginx/nginx.conf` (el original queda en `nginx.conf.panel-orig`) y,
-por defecto, **deja de cargar `sites-enabled/` y `conf.d/`**. Si tienes sitios previos,
-migra o actívalos en Seguridad → Avanzado (choca si alguno declara `default_server`).
+</td>
+</tr>
+<tr>
+<td valign="top">
 
-## Seguridad del propio panel
+### 🔐 Seguro por diseño
+WAF integrado, 2FA, permisos por área, auditoría de cada acción, CSP estricta, CSRF, validadores que impiden inyectar directivas. Los dominios desconocidos ni siquiera completan el handshake TLS.
 
-El panel corre como **root** (escribe en `/etc/nginx`, ejecuta certbot y apt). Trátalo como un SSH:
+</td>
+<td valign="top">
 
-- Por defecto escucha en todas las interfaces (0.0.0.0:8181). Limita quién entra con
-  `NP_ALLOWED_NETS` (el panel responde 403 al resto) y/o con el firewall.
-- Para usarlo por HTTPS, publícalo como un host del propio panel con certificado y lista de
-  acceso; pon `NP_BEHIND_PROXY=1` y `NP_SECURE_COOKIES=1` en `/etc/nginx-panel.env`, reinicia,
-  y cierra el 8181 en el firewall.
-- Con `NP_BEHIND_PROXY=1` la IP del cliente (`X-Forwarded-For`) solo se acepta si la conexión
-  viene de `NP_TRUSTED_PROXIES` (por defecto `127.0.0.1,::1`, el nginx del propio servidor).
-  Si el proxy está en otra máquina, añade su IP ahí; si no, el panel verá todas las peticiones
-  con la IP del proxy (`NP_ALLOWED_NETS` y el bloqueo por intentos fallidos se aplicarían a él).
-  El panel avisa en su log cuando ignora esa cabecera.
-- Activa 2FA en Mi cuenta.
-- Las directivas personalizadas (texto libre que llega a nginx) solo las ven los administradores.
-  Todo lo demás pasa por validadores que impiden inyectar directivas.
-- Sesiones: cookie HttpOnly + SameSite=Strict, CSRF en todos los POST, CSP estricta.
+### 🎯 Instalar es preguntar y listo
+El instalador te guía: ¿proxy inverso?, ¿dónde?, ¿HTTPS?, ¿qué redes entran? Y para actualizar, el mismo comando: conserva tu configuración y vuelve a preguntar solo lo importante.
 
-## Comandos
+</td>
+</tr>
+</table>
+
+---
+
+## 📦 Instalación (Debian 13)
 
 ```bash
-nginx-panel create-admin USUARIO [--random]   # crear o recuperar un admin (resetea su 2FA)
-nginx-panel apply                             # regenerar config desde la BD
+apt install -y git sudo                     # si tu Debian es mínimo
+git clone https://github.com/0xenca/nginxmanager
+cd nginxmanager
+sudo ./install.sh
+```
+
+El instalador te pregunta:
+
+| Pregunta | Para qué |
+|---|---|
+| 🌐 **¿Detrás de un proxy inverso?** | Publicar el panel como `https://panel.tudominio.com`. |
+| 📍 **¿Dónde está el proxy?** | En este servidor (recomendado: el propio panel se publica a sí mismo) o en otra máquina (otro nginx, HAProxy, Traefik, Cloudflare Tunnel…). |
+| 🔒 **¿HTTPS?** | Activa cookies `Secure`. |
+| 🚪 **Puerto y redes con acceso** | Por ejemplo, solo tu LAN y tu VPN: `192.168.1.0/24,10.8.0.0/24`. |
+| 🧩 **¿Instalar nginx?** | nginx + módulo stream + certbot, en el mismo paso. |
+
+Al terminar te muestra la URL, el usuario `admin` con una contraseña aleatoria y los siguientes pasos.
+
+Primer uso en el panel: **Sistema → Tomar el control de nginx**. Listo.
+
+### 🔄 Actualizar
+
+```bash
+cd nginxmanager && git pull && sudo ./install.sh
+```
+
+Te enseña la configuración actual y vuelve a preguntar por el proxy inverso; **Enter mantiene cada valor**. Nunca toca usuarios, hosts ni certificados.
+
+### 🤖 Sin preguntas (automatización)
+
+```bash
+sudo ./install.sh -y --with-nginx --allow 192.168.1.0/24          # acceso directo, solo LAN
+sudo ./install.sh -y --behind-proxy --https                        # proxy en este servidor
+sudo ./install.sh -y --trusted-proxies 10.0.0.2 --bind 10.0.0.5   # proxy en otra máquina
+sudo ./install.sh --help                                           # todas las opciones
+```
+
+---
+
+## 🧰 Todo lo que hace
+
+<table>
+<tr><td>🌍</td><td><b>Hosts</b></td><td>Proxy inverso o redirección. Varios dominios y comodines. Destino directo o backend balanceado.</td></tr>
+<tr><td>🗂️</td><td><b>Grupos</b></td><td>Carpetas con color (Internos, Públicos, Clientes…). Lista agrupada y plegable, buscador, mover hosts entre grupos con selección múltiple y activar o desactivar un grupo entero en un solo cambio. Filtro por grupo en analíticas, logs y exportaciones.</td></tr>
+<tr><td>🩺</td><td><b>Diagnóstico de hosts</b></td><td>Por capas y bajo demanda: DNS (¿resuelve? ¿apunta aquí?), nginx local, vía DNS como un cliente real (detecta NAT loopback, firewall o que responda otra máquina), cada servidor del backend, certificado (confianza, nombre, caducidad) y redirección HTTP→HTTPS.</td></tr>
+<tr><td>⚖️</td><td><b>Backends</b></td><td>Round robin, least_conn, ip_hash o hash consistente. Pesos, backup, down, max_fails y keepalive.</td></tr>
+<tr><td>🔒</td><td><b>SSL</b></td><td>Let's Encrypt con renovación automática, subida de PEM con verificación clave↔certificado, autofirmados. Forzar HTTPS, HTTP/2 y HSTS con un clic.</td></tr>
+<tr><td>🔌</td><td><b>WebSocket</b></td><td>Cabeceras Upgrade/Connection y timeouts de 1 h por host.</td></tr>
+<tr><td>📡</td><td><b>Streams TCP/UDP</b></td><td>Bases de datos, juegos, DNS, VPN… con varios destinos, balanceo y ACL por IP.</td></tr>
+<tr><td>🛡️</td><td><b>WAF</b></td><td>Escáneres (sqlmap, nikto, nuclei…), sondeos (<code>.env</code>, <code>.git</code>, phpMyAdmin), SQLi, XSS, traversal, Log4Shell y métodos TRACE. Lista negra global, rate limit y límite de conexiones por IP, cabeceras de seguridad y timeouts anti-slowloris.</td></tr>
+<tr><td>🚫</td><td><b>Dominios desconocidos</b></td><td>Cierre sin respuesta (444) y, en HTTPS, rechazo del handshake si el SNI no es tuyo. Ni tu IP ni un dominio ajeno muestran nada.</td></tr>
+<tr><td>🧱</td><td><b>Listas de acceso</b></td><td>Allow/deny por IP/CIDR y usuarios con contraseña (SHA-512), combinables con <code>satisfy all/any</code>.</td></tr>
+<tr><td>🚀</td><td><b>Caché</b></td><td>Solo estáticos o todo, respetando Cache-Control y sin cachear nunca peticiones con sesión o <code>Authorization</code>. Cabecera <code>X-Cache-Status</code>.</td></tr>
+<tr><td>📊</td><td><b>Analíticas</b></td><td>Peticiones por estado, ancho de banda, p95, % de 5xx, aciertos de caché, top de IPs/rutas/hosts/UA y ataques bloqueados. <b>Bloquea una IP con un clic.</b></td></tr>
+<tr><td>📜</td><td><b>Logs</b></td><td>JSON con filtros por fecha, IP/CIDR, host, estado (<code>5xx</code>, <code>>=400</code>, <code>!200</code>), método, ruta y UA. Exportación CSV/JSONL, descarga de rotados <code>.gz</code> y visor de error.log.</td></tr>
+<tr><td>👥</td><td><b>Usuarios</b></td><td>Permisos por área (sin acceso / ver / gestionar), administradores, 2FA TOTP, bloqueo tras 5 fallos y auditoría de cada acción.</td></tr>
+<tr><td>🖧</td><td><b>Interfaces</b></td><td>Cada host y cada stream elige por qué IP del servidor se publica, o todas.</td></tr>
+<tr><td>⚙️</td><td><b>Sistema</b></td><td>Instalar nginx, <code>nginx -t</code>, recargar y reiniciar. Copia antes de cada cambio y restauración en un clic.</td></tr>
+</table>
+
+---
+
+## 🧠 Cómo aplica los cambios
+
+```
+ tu cambio ─► BD ─► genera TODA la config ─► copia de seguridad ─► nginx -t ─┬─► ✅ recarga
+                                                                            └─► ❌ restaura ficheros + deshace en BD + te enseña el error
+```
+
+- **Arranque a prueba de DNS:** si un backend usa un nombre que aún no resuelve al encender el servidor, systemd reintenta arrancar nginx cada minuto hasta lograrlo (`/etc/systemd/system/nginx.service.d/nginx-panel-restart.conf`).
+- **Toma el control limpiamente:** reescribe `/etc/nginx/nginx.conf` (el original queda en `nginx.conf.panel-orig`) y por defecto deja de cargar `sites-enabled/` y `conf.d/`. Si tienes sitios previos, puedes reactivarlos en Seguridad → Avanzado.
+
+---
+
+## 🔐 Seguridad del propio panel
+
+El panel corre como **root** (escribe en `/etc/nginx` y ejecuta certbot y apt). Trátalo como un SSH:
+
+- 🌐 **Publícalo detrás de un proxy inverso con HTTPS.** Elige «proxy en este servidor» en el instalador: el panel escucha solo en `127.0.0.1` y nadie puede saltarse el proxy.
+- 🎯 **Limita quién entra** con las redes permitidas (el panel responde 403 al resto) y/o con el firewall.
+- 🔑 **Activa 2FA** en Mi cuenta. Cada código vale una sola vez.
+- 🧾 **IP real del cliente:** `X-Forwarded-For` solo se acepta de `NP_TRUSTED_PROXIES`. El panel avisa en su log si recibe esa cabecera de alguien que no es de confianza.
+- 🍪 **Sesiones:** cookie HttpOnly + SameSite=Strict, CSRF en todos los POST y CSP estricta con SRI. Cambiar la contraseña cierra las demás sesiones.
+- ✍️ **Directivas personalizadas** (texto libre que llega a nginx) solo para administradores. Todo lo demás pasa por validadores que impiden inyectar directivas.
+
+---
+
+## ⌨️ Comandos
+
+```bash
+nginx-panel create-admin USUARIO                  # crear o recuperar un admin (pide la contraseña; resetea su 2FA)
+nginx-panel create-admin USUARIO --password-stdin # lo mismo, para scripts
+nginx-panel apply                                 # regenerar la config desde la BD
 systemctl status nginx-panel
 journalctl -u nginx-panel -f
 ```
 
-## Límites conocidos
+### Configuración (`/etc/nginx-panel.env`)
 
-- **El estado se comprueba desde el propio servidor.** «Accesible» significa que nginx y el
-  backend responden desde dentro; la prueba «Vía DNS» se acerca a lo que ve un cliente, pero
-  no sustituye a una comprobación desde fuera de tu red (NAT loopback, CGNAT, firewall del ISP).
+La escribe el instalador; para cambiarla, vuelve a ejecutar `sudo ./install.sh` o edítala y haz `systemctl restart nginx-panel`.
 
-- **WAF básico, no ModSecurity/Coraza.** Corta escáneres y explotación automatizada con pocos
-  falsos positivos; no sustituye a un WAF con reglas OWASP CRS.
-- **Comodines `*.dominio`** necesitan DNS-01: súbelos como certificado propio.
-- **Analíticas**: parsea los logs en cada consulta. Va bien hasta varios cientos de MB por
-  rango; con más volumen la consulta se corta y lo indica.
+| Variable | Por defecto | Qué hace |
+|---|---|---|
+| `NP_BIND` | `0.0.0.0` | IP de escucha (`127.0.0.1` con proxy en este servidor) |
+| `NP_PANEL_PORT` | `8181` | Puerto del panel |
+| `NP_BEHIND_PROXY` | `0` | `1` = publicado detrás de un proxy inverso |
+| `NP_TRUSTED_PROXIES` | `127.0.0.1,::1` | Proxies cuyo `X-Forwarded-For` se acepta |
+| `NP_SECURE_COOKIES` | `0` | `1` = panel servido por HTTPS |
+| `NP_ALLOWED_NETS` | *(vacío = todas)* | Redes que pueden usar el panel |
+
+---
+
+## 📏 Límites conocidos
+
+- **El diagnóstico se hace desde el propio servidor.** La prueba «vía DNS» se acerca a lo que ve un cliente, pero no sustituye a una comprobación desde fuera de tu red (NAT loopback, CGNAT, firewall del ISP).
+- **WAF básico, no ModSecurity/Coraza.** Corta escáneres y explotación automatizada con pocos falsos positivos; no sustituye a un WAF con reglas OWASP CRS.
+- **Comodines `*.dominio`** necesitan validación DNS-01: súbelos como certificado propio.
+- **Analíticas:** se calculan leyendo los logs en cada consulta. Van bien hasta varios cientos de MB por rango; con más volumen la consulta se corta y lo indica.
 - Sin GeoIP en esta versión.
-- Probado en Ubuntu 24.04 con nginx 1.26. Contempla Debian (nginx 1.22, sintaxis `listen … http2`)
-  y RHEL/Rocky (dnf + EPEL), pero no se ha probado en ellos.
+- **Plataforma soportada: Debian 13.** Probado contra nginx 1.26 real (la versión de Debian 13) con 115 comprobaciones de extremo a extremo: formularios → config generada → `nginx -t` → tráfico real con curl.
 
-## Estructura
+---
+
+## 🗺️ Estructura
 
 ```
+install.sh              instalador / actualizador interactivo
 nginxpanel/
-  __init__.py   factoría Flask, cabeceras de seguridad
-  views.py      rutas
-  nginx.py      detección de entorno, generación, aplicación con rollback
-  forms.py      formularios declarativos + validadores anti-inyección
-  certs.py      Let's Encrypt / PEM / autofirmados
-  logs.py       filtrado, exportación y analíticas
-  auth.py       sesiones, permisos, CSRF, TOTP, bloqueo
-  jobs.py       tareas en segundo plano (apt, certbot)
-  templates/nginx/*.j2   plantillas de configuración nginx
+  __init__.py           factoría Flask, cabeceras de seguridad, proxy de confianza
+  views.py              rutas
+  nginx.py              detección del entorno, generación y aplicación con rollback
+  forms.py              formularios declarativos + validadores anti-inyección
+  certs.py              Let's Encrypt / PEM / autofirmados
+  checks.py             diagnóstico de hosts por capas
+  logs.py               filtrado, exportación y analíticas
+  auth.py               sesiones, permisos, CSRF, TOTP, bloqueo
+  jobs.py               tareas en segundo plano (apt, certbot)
+  templates/nginx/*.j2  plantillas de configuración nginx
 ```
+
+<div align="center">
+
+<br>
+
+**Hecho para que gestionar nginx sea un placer, no un riesgo.** ⭐ Si te ahorra tiempo, dale una estrella.
+
+</div>

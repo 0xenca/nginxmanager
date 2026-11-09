@@ -3,6 +3,7 @@ import json
 import re
 import shutil
 import time
+from urllib.parse import urlparse
 
 from flask import (Blueprint, Response, abort, current_app, flash, g, jsonify, redirect, render_template,
                    request, send_file, session, stream_with_context, url_for)
@@ -63,6 +64,24 @@ def page_args():
 # sesión
 # ======================================================================
 
+def _local_redirect(target, default):
+    """Redirige a 'target' solo si es una ruta local de este panel; si no, a 'default'."""
+    # Patrón recomendado por CodeQL: se quita '\' (los navegadores lo tratan como '/') y se
+    # redirige exactamente el valor comprobado, que debe ser una ruta sin esquema ni dominio.
+    target = (target or "").replace("\\", "")
+    if not urlparse(target).netloc and not urlparse(target).scheme and _safe_next(target):
+        return redirect(target)
+    return redirect(default)
+
+
+def _back(default):
+    """Vuelve a la página anterior (Referer) solo si es de este mismo panel."""
+    ref = urlparse(request.referrer or "")
+    if ref.netloc == request.host and ref.path.startswith("/"):
+        return _local_redirect(ref.path + (f"?{ref.query}" if ref.query else ""), default)
+    return redirect(default)
+
+
 def _safe_next(nxt):
     """Solo rutas locales: '/algo'. Rechaza '//host', '/\\host' y caracteres de control,
     que los navegadores interpretan como URL de otro dominio (open redirect)."""
@@ -98,7 +117,7 @@ def login():
             return redirect(url_for("main.login_2fa"))
         auth.clear_fails(ip)
         auth.do_login(user)
-        return redirect(nxt)
+        return _local_redirect(nxt, url_for("main.dashboard"))
     return render_template("login.html", no_users=no_users)
 
 
@@ -114,11 +133,11 @@ def login_2fa():
             flash("Demasiados intentos fallidos. Espera 15 minutos.", "error")
             return render_template("login_2fa.html"), 429
         row = db.get_db().execute("SELECT * FROM users WHERE id=? AND active=1", (uid,)).fetchone()
-        if row and auth.totp_verify(row["totp_secret"], request.form.get("code")):
+        if row and auth.totp_use(row["id"], row["totp_secret"], request.form.get("code")):
             nxt = session.get("next") or url_for("main.dashboard")
             auth.clear_fails(ip)
             auth.do_login(dict(row))
-            return redirect(nxt)
+            return _local_redirect(nxt, url_for("main.dashboard"))
         auth.register_fail(ip, row["username"] if row else "?")
         flash("Código incorrecto.", "error")
     return render_template("login_2fa.html")
@@ -778,14 +797,14 @@ def block_ip():
         cidr = forms.parse_cidr(ip)
     except ValueError:
         flash("IP no válida", "error")
-        return redirect(request.referrer or url_for("main.security"))
+        return _back(url_for("main.security"))
     s = db.get_settings()
     if cidr not in s["blocklist"]:
         db.set_settings({"blocklist": s["blocklist"] + [cidr]})
         if apply_and_report("block-ip"):
             log("bloquear_ip", cidr)
             flash(f"{cidr} añadida a la lista negra.", "ok")
-    return redirect(request.referrer or url_for("main.security"))
+    return _back(url_for("main.security"))
 
 
 # ======================================================================
@@ -937,7 +956,10 @@ def _user_form_save(uid=None):
         if pw:
             conn.execute("UPDATE users SET password_hash=? WHERE id=?", (auth.hash_password(pw), uid))
         if f.get("reset_2fa"):
-            conn.execute("UPDATE users SET totp_enabled=0, totp_secret=NULL WHERE id=?", (uid,))
+            conn.execute("UPDATE users SET totp_enabled=0, totp_secret=NULL, totp_last=0 WHERE id=?", (uid,))
+        if pw or f.get("reset_2fa") or not active:
+            conn.commit()
+            auth.end_other_sessions(uid, keep_current=True)
     else:
         conn.execute("INSERT INTO users(username, password_hash, is_admin, perms, active, created_at) "
                      "VALUES (?,?,?,?,?,?)", (username, auth.hash_password(pw), is_admin, json.dumps(perms),
@@ -1012,14 +1034,17 @@ def profile():
                 conn.execute("UPDATE users SET password_hash=? WHERE id=?",
                              (auth.hash_password(request.form["new"]), g.user["id"]))
                 conn.commit()
+                auth.end_other_sessions(g.user["id"], keep_current=True)
                 log("cambiar_password")
                 flash("Contraseña cambiada.", "ok")
         elif action == "2fa_start":
             session["totp_setup"] = auth.totp_new_secret()
         elif action == "2fa_confirm":
             secret = session.get("totp_setup")
-            if secret and auth.totp_verify(secret, request.form.get("code")):
-                conn.execute("UPDATE users SET totp_secret=?, totp_enabled=1 WHERE id=?", (secret, g.user["id"]))
+            counter = auth.totp_match(secret, request.form.get("code")) if secret else None
+            if counter is not None:
+                conn.execute("UPDATE users SET totp_secret=?, totp_enabled=1, totp_last=? WHERE id=?",
+                             (secret, counter, g.user["id"]))
                 conn.commit()
                 session.pop("totp_setup", None)
                 log("2fa_activar")
@@ -1027,7 +1052,7 @@ def profile():
             else:
                 flash("Código incorrecto. Comprueba la hora del móvil.", "error")
         elif action == "2fa_disable":
-            if auth.totp_verify(row["totp_secret"], request.form.get("code")):
+            if auth.totp_use(g.user["id"], row["totp_secret"], request.form.get("code")):
                 conn.execute("UPDATE users SET totp_secret=NULL, totp_enabled=0 WHERE id=?", (g.user["id"],))
                 conn.commit()
                 log("2fa_desactivar")
@@ -1101,7 +1126,7 @@ def system_service(action):
         log(f"nginx_{action}", out[:500])
     else:
         abort(404)
-    return redirect(request.referrer or url_for("main.system"))
+    return _back(url_for("main.system"))
 
 
 @bp.route("/system/restore", methods=["POST"])

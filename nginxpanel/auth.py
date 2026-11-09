@@ -166,12 +166,40 @@ def _totp_at(secret, counter):
     return f"{code:06d}"
 
 
-def totp_verify(secret, code, window=1):
+def totp_match(secret, code, window=1):
+    """Paso de tiempo (contador) en el que 'code' es válido, o None."""
     code = (code or "").strip().replace(" ", "")
     if not secret or len(code) != 6 or not code.isdigit():
-        return False
+        return None
     now = int(time.time() // 30)
-    return any(hmac.compare_digest(_totp_at(secret, now + d), code) for d in range(-window, window + 1))
+    for d in range(-window, window + 1):
+        if hmac.compare_digest(_totp_at(secret, now + d), code):
+            return now + d
+    return None
+
+
+def totp_verify(secret, code, window=1):
+    return totp_match(secret, code, window) is not None
+
+
+def totp_use(user_id, secret, code):
+    """Verifica el código y lo consume: un mismo código (o uno anterior) no vale dos veces."""
+    db = get_db()
+    counter = totp_match(secret, code)
+    if counter is None:
+        return False
+    cur = db.execute("UPDATE users SET totp_last=? WHERE id=? AND totp_last < ?", (counter, user_id, counter))
+    db.commit()
+    return cur.rowcount == 1
+
+
+def end_other_sessions(user_id, keep_current=False):
+    """Invalida las sesiones abiertas del usuario (cambio de contraseña, reset de 2FA…)."""
+    db = get_db()
+    db.execute("UPDATE users SET session_epoch = session_epoch + 1 WHERE id=?", (user_id,))
+    db.commit()
+    if keep_current and session.get("uid") == user_id:
+        session["epoch"] = db.execute("SELECT session_epoch FROM users WHERE id=?", (user_id,)).fetchone()[0]
 
 
 def totp_uri(secret, username, issuer="NginxPanel"):
@@ -182,6 +210,7 @@ def totp_uri(secret, username, issuer="NginxPanel"):
 def do_login(user):
     session.clear()
     session["uid"] = user["id"]
+    session["epoch"] = user.get("session_epoch", 0)
     session["login_at"] = time.time()
     session.permanent = True
     db = get_db()

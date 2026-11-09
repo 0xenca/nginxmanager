@@ -74,7 +74,8 @@ def create_app():
         uid = session.get("uid")
         if uid and time.time() - session.get("login_at", 0) < 12 * 3600:
             g.user = auth.load_user(uid)
-            if not g.user:
+            if not g.user or session.get("epoch", 0) != g.user.get("session_epoch", 0):
+                g.user = None
                 session.clear()
         auth.check_csrf()
 
