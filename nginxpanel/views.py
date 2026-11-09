@@ -3,6 +3,7 @@ import json
 import re
 import shutil
 import time
+from urllib.parse import urlparse
 
 from flask import (Blueprint, Response, abort, current_app, flash, g, jsonify, redirect, render_template,
                    request, send_file, session, stream_with_context, url_for)
@@ -63,6 +64,23 @@ def page_args():
 # sesión
 # ======================================================================
 
+def _local_redirect(target, default):
+    """Redirige a 'target' solo si es una ruta local de este panel; si no, a 'default'."""
+    target = target or ""
+    url = urlparse(target.replace("\\", ""))
+    if not url.scheme and not url.netloc and _safe_next(target):
+        return redirect(target)
+    return redirect(default)
+
+
+def _back(default):
+    """Vuelve a la página anterior (Referer) solo si es de este mismo panel."""
+    ref = urlparse(request.referrer or "")
+    if ref.netloc == request.host and ref.path.startswith("/"):
+        return _local_redirect(ref.path + (f"?{ref.query}" if ref.query else ""), default)
+    return redirect(default)
+
+
 def _safe_next(nxt):
     """Solo rutas locales: '/algo'. Rechaza '//host', '/\\host' y caracteres de control,
     que los navegadores interpretan como URL de otro dominio (open redirect)."""
@@ -98,7 +116,7 @@ def login():
             return redirect(url_for("main.login_2fa"))
         auth.clear_fails(ip)
         auth.do_login(user)
-        return redirect(nxt)
+        return _local_redirect(nxt, url_for("main.dashboard"))
     return render_template("login.html", no_users=no_users)
 
 
@@ -118,7 +136,7 @@ def login_2fa():
             nxt = session.get("next") or url_for("main.dashboard")
             auth.clear_fails(ip)
             auth.do_login(dict(row))
-            return redirect(nxt)
+            return _local_redirect(nxt, url_for("main.dashboard"))
         auth.register_fail(ip, row["username"] if row else "?")
         flash("Código incorrecto.", "error")
     return render_template("login_2fa.html")
@@ -778,14 +796,14 @@ def block_ip():
         cidr = forms.parse_cidr(ip)
     except ValueError:
         flash("IP no válida", "error")
-        return redirect(request.referrer or url_for("main.security"))
+        return _back(url_for("main.security"))
     s = db.get_settings()
     if cidr not in s["blocklist"]:
         db.set_settings({"blocklist": s["blocklist"] + [cidr]})
         if apply_and_report("block-ip"):
             log("bloquear_ip", cidr)
             flash(f"{cidr} añadida a la lista negra.", "ok")
-    return redirect(request.referrer or url_for("main.security"))
+    return _back(url_for("main.security"))
 
 
 # ======================================================================
@@ -1101,7 +1119,7 @@ def system_service(action):
         log(f"nginx_{action}", out[:500])
     else:
         abort(404)
-    return redirect(request.referrer or url_for("main.system"))
+    return _back(url_for("main.system"))
 
 
 @bp.route("/system/restore", methods=["POST"])

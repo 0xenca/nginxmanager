@@ -1,5 +1,6 @@
 """Tareas en segundo plano (instalar nginx, pedir certificados) con log en disco."""
 import json
+import re
 import subprocess
 import threading
 import time
@@ -8,8 +9,15 @@ import uuid
 from . import config
 
 
+JID_RE = re.compile(r"\d{14}-[0-9a-f]{6}")
+
+
 def _paths(jid):
-    return config.JOBS_DIR / f"{jid}.log", config.JOBS_DIR / f"{jid}.json"
+    lp = config.safe_path(config.JOBS_DIR, f"{jid}.log")
+    sp = config.safe_path(config.JOBS_DIR, f"{jid}.json")
+    if lp is None or sp is None:
+        raise ValueError("id de tarea no válido")
+    return lp, sp
 
 
 def _write_state(jid, **state):
@@ -65,7 +73,7 @@ def start(title, commands, on_done=None, env=None):
 
 
 def get(jid):
-    if not jid or "/" in jid or ".." in jid:
+    if not jid or not JID_RE.fullmatch(jid):
         return None
     lp, sp = _paths(jid)
     if not sp.exists():

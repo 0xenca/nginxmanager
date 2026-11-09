@@ -12,7 +12,10 @@ from .nginx import cert_paths, run
 
 
 def cert_dir(cid):
-    return config.DATA_DIR / "certs" / str(cid)
+    d = config.safe_path(config.DATA_DIR / "certs", int(cid))
+    if d is None:
+        raise ValueError("id de certificado no válido")
+    return d
 
 
 def certname_for(cid, domains):
