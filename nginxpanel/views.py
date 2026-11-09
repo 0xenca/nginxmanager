@@ -66,9 +66,10 @@ def page_args():
 
 def _local_redirect(target, default):
     """Redirige a 'target' solo si es una ruta local de este panel; si no, a 'default'."""
-    target = target or ""
-    url = urlparse(target.replace("\\", ""))
-    if not url.scheme and not url.netloc and _safe_next(target):
+    # Patrón recomendado por CodeQL: se quita '\' (los navegadores lo tratan como '/') y se
+    # redirige exactamente el valor comprobado, que debe ser una ruta sin esquema ni dominio.
+    target = (target or "").replace("\\", "")
+    if not urlparse(target).netloc and not urlparse(target).scheme and _safe_next(target):
         return redirect(target)
     return redirect(default)
 
