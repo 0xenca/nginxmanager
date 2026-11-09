@@ -5,10 +5,10 @@
 # Por defecto el panel escucha en todas las interfaces (0.0.0.0) y acepta cualquier IP.
 set -euo pipefail
 
-BIND="0.0.0.0"; PORT="8181"; ALLOW=""; WITH_NGINX=0; BEHIND_PROXY=0
+BIND="0.0.0.0"; BIND_SET=0; PORT="8181"; ALLOW=""; WITH_NGINX=0; BEHIND_PROXY=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --bind) BIND="$2"; shift ;;
+    --bind) BIND="$2"; BIND_SET=1; shift ;;
     --port) PORT="$2"; shift ;;
     --allow) ALLOW="$2"; shift ;;
     --with-nginx) WITH_NGINX=1 ;;
@@ -17,6 +17,9 @@ while [ $# -gt 0 ]; do
     *) echo "Opción desconocida: $1"; exit 1 ;;
   esac; shift
 done
+# Detrás de un proxy, el panel solo debe escuchar en localhost: si fuera accesible
+# directamente, cualquiera podría falsear X-Forwarded-For.
+if [ $BEHIND_PROXY -eq 1 ] && [ $BIND_SET -eq 0 ]; then BIND="127.0.0.1"; fi
 
 [ "$(id -u)" -eq 0 ] || { echo "Ejecuta como root (sudo)."; exit 1; }
 SRC="$(cd "$(dirname "$0")" && pwd)"
@@ -60,6 +63,8 @@ if [ ! -f /etc/nginx-panel.env ]; then
 NP_BIND=$BIND
 NP_PANEL_PORT=$PORT
 NP_BEHIND_PROXY=$BEHIND_PROXY
+# Proxies cuyo X-Forwarded-For se acepta (solo con NP_BEHIND_PROXY=1)
+NP_TRUSTED_PROXIES=127.0.0.1,::1
 # Redes que pueden usar el panel (CIDR separados por comas). Vacío = cualquiera.
 NP_ALLOWED_NETS=$ALLOW
 # Pon 1 si accedes al panel por HTTPS (cookies Secure)
@@ -127,8 +132,9 @@ ROT
 systemctl daemon-reload
 systemctl enable --now nginx-panel
 
-if ! /usr/local/bin/nginx-panel create-admin admin --random 2>/dev/null | tee /tmp/.np-admin | grep -q creado; then :; fi
-PW=$(grep -oP 'Contraseña: \K.*' /tmp/.np-admin || true); rm -f /tmp/.np-admin
+NP_OUT=$(umask 077; mktemp)
+if ! /usr/local/bin/nginx-panel create-admin admin --random 2>/dev/null | tee "$NP_OUT" | grep -q creado; then :; fi
+PW=$(grep -oP 'Contraseña: \K.*' "$NP_OUT" || true); rm -f "$NP_OUT"
 
 echo
 echo "================================================================"

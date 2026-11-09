@@ -182,6 +182,17 @@ def search(kind, flt, page=1, per_page=100, max_scan_seconds=25):
             "truncated": truncated, "elapsed": round(time.time() - start, 2)}
 
 
+_NUM_RE = re.compile(r"^-?\d+(\.\d+)?$")
+
+
+def csv_safe(v):
+    """Neutraliza fórmulas (=, +, -, @…) en campos controlados por el cliente (URI, UA,
+    referer) para que Excel/LibreOffice no las ejecuten al abrir el CSV."""
+    if isinstance(v, str) and v and v[0] in "=+-@\t\r" and v != "-" and not _NUM_RE.match(v):
+        return "'" + v
+    return v
+
+
 def export(kind, flt, fmt="csv"):
     cols = KINDS[kind]
     if fmt == "jsonl":
@@ -196,7 +207,7 @@ def export(kind, flt, fmt="csv"):
     for e in iter_entries(kind, flt):
         buf.seek(0)
         buf.truncate()
-        w.writerow([e.get(c, "") for c in cols])
+        w.writerow([csv_safe(e.get(c, "")) for c in cols])
         yield buf.getvalue()
 
 

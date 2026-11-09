@@ -16,6 +16,7 @@ DURATION_RE = re.compile(r"^\d{1,6}(ms|s|m|h|d)?$")
 SIZE_RE = re.compile(r"^\d{1,6}[kKmMgG]?$")
 URL_RE = re.compile(r"^https?://[^\s;{}\"'\\$`<>]+$")
 AUTH_USER_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]{1,64}@([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}$")
 
 
 class V(Exception):
@@ -105,6 +106,13 @@ def v_url(raw):
     raw = (raw or "").strip()
     if not URL_RE.match(raw):
         raise V("URL no válida (http:// o https://, sin espacios ni ; { } $ comillas)")
+    return raw
+
+
+def v_email(raw):
+    raw = (raw or "").strip()
+    if not EMAIL_RE.fullmatch(raw) or raw.startswith("-"):
+        raise V("Email no válido")
     return raw
 
 
@@ -408,7 +416,8 @@ def settings_fields():
         F("cache_keys_zone_mb", "Zona de claves (MB)", "number", 50, validate=v_int(1, 4096)),
         F("cache_max_size", "Tamaño máximo en disco", "text", "2g", validate=v_size),
         S("Let's Encrypt"),
-        F("le_email", "Email de contacto", "text", "", placeholder="admin@dominio.com"),
+        F("le_email", "Email de contacto", "text", "", placeholder="admin@dominio.com", validate=v_email,
+          optional=True),
         F("le_staging", "Usar entorno staging (pruebas)", "bool", False),
         S("Avanzado (solo administradores)", admin_only=True),
         F("include_legacy", "Incluir también conf.d/ y sites-enabled/ existentes", "bool", False, admin_only=True,

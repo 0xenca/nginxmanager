@@ -24,6 +24,8 @@ DRY_RUN = _env("NP_DRY_RUN", "0") == "1"           # no recarga/instala nada (te
 BEHIND_PROXY = _env("NP_BEHIND_PROXY", "0") == "1"   # el panel se publica a través de nginx
 # Redes desde las que se permite usar el panel (CIDR separados por comas). Vacío = cualquiera.
 ALLOWED_NETS = [x.strip() for x in _env("NP_ALLOWED_NETS", "").split(",") if x.strip()]
+# Proxies cuyo X-Forwarded-For se acepta cuando NP_BEHIND_PROXY=1 (por defecto solo localhost).
+TRUSTED_PROXIES = [x.strip() for x in _env("NP_TRUSTED_PROXIES", "127.0.0.1,::1").split(",") if x.strip()]
 SECURE_COOKIES = _env("NP_SECURE_COOKIES", "0") == "1"
 
 DB_PATH = DATA_DIR / "panel.db"
@@ -35,6 +37,7 @@ SECRET_FILE = DATA_DIR / "secret.key"
 def secret_key():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     if not SECRET_FILE.exists():
-        SECRET_FILE.write_text(secrets.token_hex(32))
-        os.chmod(SECRET_FILE, 0o600)
+        fd = os.open(SECRET_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as fh:
+            fh.write(secrets.token_hex(32))
     return SECRET_FILE.read_text().strip()

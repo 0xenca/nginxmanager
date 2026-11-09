@@ -63,6 +63,13 @@ def page_args():
 # sesión
 # ======================================================================
 
+def _safe_next(nxt):
+    """Solo rutas locales: '/algo'. Rechaza '//host', '/\\host' y caracteres de control,
+    que los navegadores interpretan como URL de otro dominio (open redirect)."""
+    return (nxt.startswith("/") and not nxt.startswith(("//", "/\\"))
+            and "\\" not in nxt and not any(ord(c) < 32 or ord(c) == 127 for c in nxt))
+
+
 @bp.route("/login", methods=["GET", "POST"])
 def login():
     if g.user:
@@ -80,7 +87,7 @@ def login():
             flash("Usuario o contraseña incorrectos.", "error")
             return render_template("login.html", no_users=no_users), 401
         nxt = request.args.get("next", "")
-        if not nxt.startswith("/") or nxt.startswith("//"):
+        if not _safe_next(nxt):
             nxt = url_for("main.dashboard")
         if user["totp_enabled"]:
             keep = session.get("_csrf")
@@ -875,6 +882,17 @@ def users():
     return render_template("users.html", users=rows)
 
 
+def _can_manage(target):
+    """Un no-admin solo gestiona usuarios cuyos permisos no superen los suyos en ningún área.
+    Si no, podría cambiarle la contraseña y entrar con sus permisos (escalada)."""
+    if g.user["is_admin"]:
+        return True
+    if target["is_admin"]:
+        return False
+    perms = json.loads(target["perms"] or "{}")
+    return all(int(perms.get(a, 0)) <= auth.level(g.user, a) for a in auth.AREAS)
+
+
 def _user_form_save(uid=None):
     f = request.form
     username = f.get("username", "").strip()
@@ -908,6 +926,8 @@ def _user_form_save(uid=None):
         target = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
         if target["is_admin"] and not g.user["is_admin"]:
             errors.append("No puedes modificar a un administrador")
+        elif not _can_manage(target):
+            errors.append("No puedes modificar a un usuario con más permisos que tú")
         if uid == g.user["id"] and (not is_admin and g.user["is_admin"] or not active):
             errors.append("No puedes quitarte el rol de administrador ni desactivarte a ti mismo")
     if errors:
@@ -962,7 +982,7 @@ def user_delete(uid):
     row = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone() or abort(404)
     if uid == g.user["id"]:
         flash("No puedes borrarte a ti mismo.", "error")
-    elif row["is_admin"] and not g.user["is_admin"]:
+    elif (row["is_admin"] and not g.user["is_admin"]) or not _can_manage(row):
         abort(403)
     elif row["is_admin"] and conn.execute("SELECT COUNT(*) FROM users WHERE is_admin=1 AND active=1").fetchone()[0] <= 1:
         flash("No puedes borrar el último administrador.", "error")
