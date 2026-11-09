@@ -318,12 +318,15 @@ def _write_tree(root, files, env):
 def backup_current(label="auto"):
     ts = time.strftime("%Y%m%d-%H%M%S") + f".{int(time.time() * 1000) % 1000:03d}"
     label = re.sub(r"[^A-Za-z0-9_-]", "_", label)[:40]
-    dest = config.BACKUP_DIR / f"{ts}-{label}"
-    n = 1
-    while dest.exists():
+    config.BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    name, n = f"{ts}-{label}", 1
+    while (config.BACKUP_DIR / name).exists():
         n += 1
-        dest = config.BACKUP_DIR / f"{ts}-{label}-{n}"
-    dest.mkdir(parents=True, exist_ok=True)
+        name = f"{ts}-{label}-{n}"
+    dest = config.safe_path(config.BACKUP_DIR, name)
+    if dest is None:
+        raise ValueError(f"Nombre de backup no válido: {name!r}")
+    dest.mkdir()
     if config.NGINX_CONF.exists():
         shutil.copy2(config.NGINX_CONF, dest / "nginx.conf")
     if config.MANAGED_DIR.exists():
@@ -439,8 +442,10 @@ def apply(db=None, label="auto"):
 
 
 def restore_backup(name, db=None):
-    src = config.BACKUP_DIR / name
-    if not src.is_dir() or "/" in name or name.startswith("."):
+    if name not in list_backups():
+        return False, "Backup no encontrado"
+    src = config.safe_path(config.BACKUP_DIR, name)
+    if src is None or not src.is_dir() or src.parent != config.BACKUP_DIR.resolve():
         return False, "Backup no encontrado"
     with apply_lock():
         backup_current("pre-restore")
@@ -466,6 +471,9 @@ def restore_backup(name, db=None):
         return ok, out if ok else rout
 
 
+SYSTEMCTL_VERBS = {"restart": "restart", "stop": "stop", "start": "start"}
+
+
 def service_action(action):
     if config.DRY_RUN:
         return True, f"DRY_RUN: {action} omitido"
@@ -474,12 +482,13 @@ def service_action(action):
         if code != 0:
             return False, out
         return reload_nginx()
-    if action in ("restart", "stop", "start") and has_systemd():
-        if action != "stop":
+    verb = SYSTEMCTL_VERBS.get(action)
+    if verb and has_systemd():
+        if verb != "stop":
             code, out = test_config()
             if code != 0:
                 return False, out
-        code, out = run(["systemctl", action, "nginx"])
+        code, out = run(["systemctl", verb, "nginx"])
         return code == 0, out or f"{action} OK"
     return False, "Acción no soportada en este sistema"
 

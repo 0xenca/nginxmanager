@@ -38,8 +38,8 @@ def all_files():
 
 
 def safe_file(name):
-    p = (config.LOG_DIR / name).resolve()
-    if p.parent != config.LOG_DIR.resolve() or not p.is_file():
+    p = config.safe_path(config.LOG_DIR, name)
+    if p is None or p.parent != config.LOG_DIR.resolve() or not p.is_file():
         return None
     return p
 

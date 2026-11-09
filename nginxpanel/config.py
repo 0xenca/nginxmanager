@@ -34,6 +34,19 @@ JOBS_DIR = DATA_DIR / "jobs"
 SECRET_FILE = DATA_DIR / "secret.key"
 
 
+def safe_path(base, name):
+    """Ruta de 'name' dentro de 'base', o None si se sale de ella (.., /, symlinks).
+
+    Normaliza con realpath y comprueba el prefijo: es el patrón que evita el path
+    traversal (y el que reconoce CodeQL como saneado).
+    """
+    root = os.path.realpath(base)
+    full = os.path.realpath(os.path.join(root, str(name)))
+    if not full.startswith(root + os.sep):
+        return None
+    return Path(full)
+
+
 def secret_key():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     if not SECRET_FILE.exists():
