@@ -57,6 +57,20 @@ def connect():
     return conn
 
 
+# Columnas añadidas después de la primera versión: (tabla, columna, definición)
+MIGRATIONS = [
+    ("users", "session_epoch", "INTEGER NOT NULL DEFAULT 0"),   # invalida sesiones al subirlo
+    ("users", "totp_last", "INTEGER NOT NULL DEFAULT 0"),       # último paso TOTP usado (anti-replay)
+]
+
+
+def _migrate(conn):
+    for table, col, ddl in MIGRATIONS:
+        cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if col not in cols:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
+
+
 def init_db():
     global _initialized
     with _init_lock:
@@ -64,6 +78,7 @@ def init_db():
             return
         conn = connect()
         conn.executescript(SCHEMA)
+        _migrate(conn)
         conn.commit()
         conn.close()
         _initialized = True

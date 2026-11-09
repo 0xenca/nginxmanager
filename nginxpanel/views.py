@@ -132,7 +132,7 @@ def login_2fa():
             flash("Demasiados intentos fallidos. Espera 15 minutos.", "error")
             return render_template("login_2fa.html"), 429
         row = db.get_db().execute("SELECT * FROM users WHERE id=? AND active=1", (uid,)).fetchone()
-        if row and auth.totp_verify(row["totp_secret"], request.form.get("code")):
+        if row and auth.totp_use(row["id"], row["totp_secret"], request.form.get("code")):
             nxt = session.get("next") or url_for("main.dashboard")
             auth.clear_fails(ip)
             auth.do_login(dict(row))
@@ -955,7 +955,10 @@ def _user_form_save(uid=None):
         if pw:
             conn.execute("UPDATE users SET password_hash=? WHERE id=?", (auth.hash_password(pw), uid))
         if f.get("reset_2fa"):
-            conn.execute("UPDATE users SET totp_enabled=0, totp_secret=NULL WHERE id=?", (uid,))
+            conn.execute("UPDATE users SET totp_enabled=0, totp_secret=NULL, totp_last=0 WHERE id=?", (uid,))
+        if pw or f.get("reset_2fa") or not active:
+            conn.commit()
+            auth.end_other_sessions(uid, keep_current=True)
     else:
         conn.execute("INSERT INTO users(username, password_hash, is_admin, perms, active, created_at) "
                      "VALUES (?,?,?,?,?,?)", (username, auth.hash_password(pw), is_admin, json.dumps(perms),
@@ -1030,14 +1033,17 @@ def profile():
                 conn.execute("UPDATE users SET password_hash=? WHERE id=?",
                              (auth.hash_password(request.form["new"]), g.user["id"]))
                 conn.commit()
+                auth.end_other_sessions(g.user["id"], keep_current=True)
                 log("cambiar_password")
                 flash("Contraseña cambiada.", "ok")
         elif action == "2fa_start":
             session["totp_setup"] = auth.totp_new_secret()
         elif action == "2fa_confirm":
             secret = session.get("totp_setup")
-            if secret and auth.totp_verify(secret, request.form.get("code")):
-                conn.execute("UPDATE users SET totp_secret=?, totp_enabled=1 WHERE id=?", (secret, g.user["id"]))
+            counter = auth.totp_match(secret, request.form.get("code")) if secret else None
+            if counter is not None:
+                conn.execute("UPDATE users SET totp_secret=?, totp_enabled=1, totp_last=? WHERE id=?",
+                             (secret, counter, g.user["id"]))
                 conn.commit()
                 session.pop("totp_setup", None)
                 log("2fa_activar")
@@ -1045,7 +1051,7 @@ def profile():
             else:
                 flash("Código incorrecto. Comprueba la hora del móvil.", "error")
         elif action == "2fa_disable":
-            if auth.totp_verify(row["totp_secret"], request.form.get("code")):
+            if auth.totp_use(g.user["id"], row["totp_secret"], request.form.get("code")):
                 conn.execute("UPDATE users SET totp_secret=NULL, totp_enabled=0 WHERE id=?", (g.user["id"],))
                 conn.commit()
                 log("2fa_desactivar")

@@ -84,7 +84,7 @@ El panel corre como **root** (escribe en `/etc/nginx`, ejecuta certbot y apt). T
 ## Comandos
 
 ```bash
-nginx-panel create-admin USUARIO [--random]   # crear o recuperar un admin (resetea su 2FA)
+nginx-panel create-admin USUARIO [--password-stdin]   # crear o recuperar un admin (resetea su 2FA)
 nginx-panel apply                             # regenerar config desde la BD
 systemctl status nginx-panel
 journalctl -u nginx-panel -f

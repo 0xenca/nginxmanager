@@ -138,9 +138,13 @@ ROT
 systemctl daemon-reload
 systemctl enable --now nginx-panel
 
-NP_OUT=$(umask 077; mktemp)
-if ! /usr/local/bin/nginx-panel create-admin admin --random 2>/dev/null | tee "$NP_OUT" | grep -q creado; then :; fi
-PW=$(grep -oP 'Contraseña: \K.*' "$NP_OUT" || true); rm -f "$NP_OUT"
+# Contraseña inicial: se genera aquí y se pasa por stdin (no aparece en ps ni en logs).
+# Solo se crea el admin si aún no existe ningún usuario.
+PW=""
+if ! /usr/local/bin/nginx-panel has-users >/dev/null 2>&1; then
+  PW=$(openssl rand -hex 12)
+  printf '%s\n' "$PW" | /usr/local/bin/nginx-panel create-admin admin --password-stdin >/dev/null
+fi
 
 echo
 echo "================================================================"
