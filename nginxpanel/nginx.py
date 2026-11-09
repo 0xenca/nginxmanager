@@ -318,12 +318,17 @@ def _write_tree(root, files, env):
 def backup_current(label="auto"):
     ts = time.strftime("%Y%m%d-%H%M%S") + f".{int(time.time() * 1000) % 1000:03d}"
     label = re.sub(r"[^A-Za-z0-9_-]", "_", label)[:40]
-    dest = config.BACKUP_DIR / f"{ts}-{label}"
+    config.BACKUP_DIR.mkdir(parents=True, exist_ok=True)
     n = 1
-    while dest.exists():
-        n += 1
-        dest = config.BACKUP_DIR / f"{ts}-{label}-{n}"
-    dest.mkdir(parents=True, exist_ok=True)
+    while True:
+        dest = config.safe_path(config.BACKUP_DIR, f"{ts}-{label}" + (f"-{n}" if n > 1 else ""))
+        if dest is None:
+            raise ValueError("Nombre de backup no válido")
+        try:
+            dest.mkdir()
+            break
+        except FileExistsError:
+            n += 1
     if config.NGINX_CONF.exists():
         shutil.copy2(config.NGINX_CONF, dest / "nginx.conf")
     if config.MANAGED_DIR.exists():
@@ -439,8 +444,10 @@ def apply(db=None, label="auto"):
 
 
 def restore_backup(name, db=None):
-    src = config.BACKUP_DIR / name
-    if not src.is_dir() or "/" in name or name.startswith("."):
+    if name not in list_backups():
+        return False, "Backup no encontrado"
+    src = config.safe_path(config.BACKUP_DIR, name)
+    if src is None:
         return False, "Backup no encontrado"
     with apply_lock():
         backup_current("pre-restore")
@@ -466,6 +473,12 @@ def restore_backup(name, db=None):
         return ok, out if ok else rout
 
 
+# Acciones de servicio admitidas (la vista valida contra SERVICE_ACTIONS). El verbo que llega
+# a systemctl sale siempre de esta tabla, nunca del dato de la petición.
+SYSTEMCTL_VERBS = {"restart": "restart", "stop": "stop", "start": "start"}
+SERVICE_ACTIONS = ("reload", *SYSTEMCTL_VERBS)
+
+
 def service_action(action):
     if config.DRY_RUN:
         return True, f"DRY_RUN: {action} omitido"
@@ -474,12 +487,13 @@ def service_action(action):
         if code != 0:
             return False, out
         return reload_nginx()
-    if action in ("restart", "stop", "start") and has_systemd():
-        if action != "stop":
+    verb = SYSTEMCTL_VERBS.get(action)
+    if verb and has_systemd():
+        if verb != "stop":
             code, out = test_config()
             if code != 0:
                 return False, out
-        code, out = run(["systemctl", action, "nginx"])
+        code, out = run(["systemctl", verb, "nginx"])
         return code == 0, out or f"{action} OK"
     return False, "Acción no soportada en este sistema"
 

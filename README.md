@@ -71,6 +71,11 @@ El panel corre como **root** (escribe en `/etc/nginx`, ejecuta certbot y apt). T
 - Para usarlo por HTTPS, publícalo como un host del propio panel con certificado y lista de
   acceso; pon `NP_BEHIND_PROXY=1` y `NP_SECURE_COOKIES=1` en `/etc/nginx-panel.env`, reinicia,
   y cierra el 8181 en el firewall.
+- Con `NP_BEHIND_PROXY=1` la IP del cliente (`X-Forwarded-For`) solo se acepta si la conexión
+  viene de `NP_TRUSTED_PROXIES` (por defecto `127.0.0.1,::1`, el nginx del propio servidor).
+  Si el proxy está en otra máquina, añade su IP ahí; si no, el panel verá todas las peticiones
+  con la IP del proxy (`NP_ALLOWED_NETS` y el bloqueo por intentos fallidos se aplicarían a él).
+  El panel avisa en su log cuando ignora esa cabecera.
 - Activa 2FA en Mi cuenta.
 - Las directivas personalizadas (texto libre que llega a nginx) solo las ven los administradores.
   Todo lo demás pasa por validadores que impiden inyectar directivas.

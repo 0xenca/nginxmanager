@@ -1,5 +1,6 @@
 """Factoría de la app Flask."""
 import ipaddress
+import logging
 import time
 from datetime import timedelta
 
@@ -7,6 +8,35 @@ from flask import Flask, abort, g, request, session
 
 from . import auth, config, logs
 from .db import close_db, init_db
+
+
+def _trusted_proxy_fix(wsgi_app, trusted):
+    """ProxyFix, pero solo si la conexión llega desde un proxy de confianza.
+
+    Sin esto, quien llegue directamente al puerto del panel podría falsear X-Forwarded-For
+    y saltarse NP_ALLOWED_NETS y el bloqueo por intentos fallidos.
+    """
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    nets = [ipaddress.ip_network(n, strict=False) for n in trusted]
+    fixed = ProxyFix(wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+    warned = set()
+
+    def middleware(environ, start_response):
+        addr = environ.get("REMOTE_ADDR", "")
+        try:
+            peer = ipaddress.ip_address(addr)
+        except ValueError:
+            peer = None
+        if peer is not None and any(peer in n for n in nets):
+            return fixed(environ, start_response)
+        if environ.get("HTTP_X_FORWARDED_FOR") and addr not in warned and len(warned) < 50:
+            warned.add(addr)
+            logging.getLogger("nginxpanel").warning(
+                "X-Forwarded-For ignorado: %s no está en NP_TRUSTED_PROXIES. Si es tu proxy, "
+                "añádelo en /etc/nginx-panel.env.", addr)
+        return wsgi_app(environ, start_response)
+    return middleware
 
 
 def create_app():
@@ -21,8 +51,7 @@ def create_app():
         MAX_CONTENT_LENGTH=2 * 1024 * 1024,
     )
     if config.BEHIND_PROXY:
-        from werkzeug.middleware.proxy_fix import ProxyFix
-        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+        app.wsgi_app = _trusted_proxy_fix(app.wsgi_app, config.TRUSTED_PROXIES)
     init_db()
     app.teardown_appcontext(close_db)
     allowed = [ipaddress.ip_network(n, strict=False) for n in config.ALLOWED_NETS]
