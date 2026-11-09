@@ -188,8 +188,10 @@ _NUM_RE = re.compile(r"^-?\d+(\.\d+)?$")
 def csv_safe(v):
     """Neutraliza fórmulas (=, +, -, @…) en campos controlados por el cliente (URI, UA,
     referer) para que Excel/LibreOffice no las ejecuten al abrir el CSV."""
-    if isinstance(v, str) and v and v[0] in "=+-@\t\r" and v != "-" and not _NUM_RE.match(v):
-        return "'" + v
+    if isinstance(v, str):
+        s = v.lstrip(" \t\r\n")
+        if s and s[0] in "=+-@" and s != "-" and not _NUM_RE.match(s):
+            return "'" + v
     return v
 
 

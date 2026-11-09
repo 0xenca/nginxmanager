@@ -319,14 +319,16 @@ def backup_current(label="auto"):
     ts = time.strftime("%Y%m%d-%H%M%S") + f".{int(time.time() * 1000) % 1000:03d}"
     label = re.sub(r"[^A-Za-z0-9_-]", "_", label)[:40]
     config.BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    name, n = f"{ts}-{label}", 1
-    while (config.BACKUP_DIR / name).exists():
-        n += 1
-        name = f"{ts}-{label}-{n}"
-    dest = config.safe_path(config.BACKUP_DIR, name)
-    if dest is None:
-        raise ValueError(f"Nombre de backup no válido: {name!r}")
-    dest.mkdir()
+    n = 1
+    while True:
+        dest = config.safe_path(config.BACKUP_DIR, f"{ts}-{label}" + (f"-{n}" if n > 1 else ""))
+        if dest is None:
+            raise ValueError("Nombre de backup no válido")
+        try:
+            dest.mkdir()
+            break
+        except FileExistsError:
+            n += 1
     if config.NGINX_CONF.exists():
         shutil.copy2(config.NGINX_CONF, dest / "nginx.conf")
     if config.MANAGED_DIR.exists():
@@ -445,7 +447,7 @@ def restore_backup(name, db=None):
     if name not in list_backups():
         return False, "Backup no encontrado"
     src = config.safe_path(config.BACKUP_DIR, name)
-    if src is None or not src.is_dir() or src.parent != config.BACKUP_DIR.resolve():
+    if src is None:
         return False, "Backup no encontrado"
     with apply_lock():
         backup_current("pre-restore")
@@ -471,7 +473,10 @@ def restore_backup(name, db=None):
         return ok, out if ok else rout
 
 
+# Acciones de servicio admitidas (la vista valida contra SERVICE_ACTIONS). El verbo que llega
+# a systemctl sale siempre de esta tabla, nunca del dato de la petición.
 SYSTEMCTL_VERBS = {"restart": "restart", "stop": "stop", "start": "start"}
+SERVICE_ACTIONS = ("reload", *SYSTEMCTL_VERBS)
 
 
 def service_action(action):

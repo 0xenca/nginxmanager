@@ -66,8 +66,7 @@ def page_args():
 def _safe_next(nxt):
     """Solo rutas locales: '/algo'. Rechaza '//host', '/\\host' y caracteres de control,
     que los navegadores interpretan como URL de otro dominio (open redirect)."""
-    return (nxt.startswith("/") and not nxt.startswith(("//", "/\\"))
-            and "\\" not in nxt and not any(ord(c) < 32 or ord(c) == 127 for c in nxt))
+    return nxt.startswith("/") and not nxt.startswith("//") and "\\" not in nxt and nxt.isprintable()
 
 
 @bp.route("/login", methods=["GET", "POST"])
@@ -1096,7 +1095,7 @@ def system_service(action):
     if action == "test":
         code, out = nginx.test_config()
         flash(out, "ok" if code == 0 else "error")
-    elif action in ("reload", "restart", "start", "stop"):
+    elif action in nginx.SERVICE_ACTIONS:
         ok, out = nginx.service_action(action)
         flash(out or f"{action}: OK", "ok" if ok else "error")
         log(f"nginx_{action}", out[:500])

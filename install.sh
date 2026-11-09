@@ -71,6 +71,12 @@ NP_ALLOWED_NETS=$ALLOW
 NP_SECURE_COOKIES=$BEHIND_PROXY
 ENV
   chmod 600 /etc/nginx-panel.env
+elif ! grep -q '^NP_TRUSTED_PROXIES=' /etc/nginx-panel.env; then
+  cat >> /etc/nginx-panel.env <<ENV
+# Proxies cuyo X-Forwarded-For se acepta (solo con NP_BEHIND_PROXY=1). Si tu proxy está en
+# otra máquina, añade aquí su IP.
+NP_TRUSTED_PROXIES=127.0.0.1,::1
+ENV
 fi
 
 echo "==> Servicio systemd"
@@ -138,8 +144,17 @@ PW=$(grep -oP 'Contraseña: \K.*' "$NP_OUT" || true); rm -f "$NP_OUT"
 
 echo
 echo "================================================================"
-IPS=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v ':' | head -3 | sed "s|.*|http://&:$PORT|" | tr '\n' ' ')
+if [ "$BIND" = "0.0.0.0" ]; then
+  IPS=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v ':' | head -3 | sed "s|.*|http://&:$PORT|" | tr '\n' ' ')
+else
+  IPS="http://$BIND:$PORT"
+fi
 echo " nginx-panel instalado. Escucha en $BIND:$PORT  →  ${IPS:-http://IP:$PORT}"
+if [ "$BIND" = "127.0.0.1" ]; then
+  echo " Solo accesible desde este servidor. Desde tu equipo, con un túnel SSH:"
+  echo "     ssh -L $PORT:127.0.0.1:$PORT usuario@servidor   y abre http://127.0.0.1:$PORT"
+  echo " y publícalo como host con HTTPS desde el propio panel."
+fi
 [ -n "$PW" ] && echo " Usuario: admin   Contraseña: $PW   (cámbiala y activa 2FA)"
 if [ "$BIND" = "0.0.0.0" ] && [ -z "$ALLOW" ]; then
   echo " AVISO: el panel (que corre como root) es accesible desde cualquier IP."

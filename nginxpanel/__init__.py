@@ -1,5 +1,6 @@
 """Factoría de la app Flask."""
 import ipaddress
+import logging
 import time
 from datetime import timedelta
 
@@ -19,13 +20,21 @@ def _trusted_proxy_fix(wsgi_app, trusted):
     nets = [ipaddress.ip_network(n, strict=False) for n in trusted]
     fixed = ProxyFix(wsgi_app, x_for=1, x_proto=1, x_host=1)
 
+    warned = set()
+
     def middleware(environ, start_response):
+        addr = environ.get("REMOTE_ADDR", "")
         try:
-            peer = ipaddress.ip_address(environ.get("REMOTE_ADDR", ""))
+            peer = ipaddress.ip_address(addr)
         except ValueError:
             peer = None
         if peer is not None and any(peer in n for n in nets):
             return fixed(environ, start_response)
+        if environ.get("HTTP_X_FORWARDED_FOR") and addr not in warned and len(warned) < 50:
+            warned.add(addr)
+            logging.getLogger("nginxpanel").warning(
+                "X-Forwarded-For ignorado: %s no está en NP_TRUSTED_PROXIES. Si es tu proxy, "
+                "añádelo en /etc/nginx-panel.env.", addr)
         return wsgi_app(environ, start_response)
     return middleware
 
