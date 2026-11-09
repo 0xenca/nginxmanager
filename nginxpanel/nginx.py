@@ -21,9 +21,22 @@ TPL = Environment(
 )
 
 
+# Únicos programas que el panel ejecuta. El ejecutable sale siempre de esta tabla (nunca del
+# dato recibido) y los argumentos se pasan como lista, sin shell: ningún valor que llegue de
+# un formulario puede convertirse en un comando.
+ALLOWED_BINS = {name: name for name in ("openssl", "certbot", "systemctl", "ip")}
+ALLOWED_BINS[config.NGINX_BIN] = config.NGINX_BIN
+
+
 def run(cmd, timeout=60, env=None):
+    exe = ALLOWED_BINS.get(cmd[0]) if cmd else None
+    if exe is None:
+        return 126, f"Programa no permitido: {cmd[0] if cmd else '(vacío)'}"
+    args = [str(a) for a in cmd[1:]]
+    if any("\0" in a for a in args):
+        return 126, "Argumento no válido"
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
+        p = subprocess.run([exe, *args], capture_output=True, text=True, timeout=timeout, env=env)
         return p.returncode, (p.stdout + p.stderr).strip()
     except FileNotFoundError:
         return 127, f"No encontrado: {cmd[0]}"
